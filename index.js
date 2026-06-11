@@ -10,9 +10,10 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const DAILY_CHANNEL_ID   = '1471586957606785249';
-const STAFF_ROLE_ID      = '1471950389971652712';
-const WELCOME_CHANNEL_ID = '1471954873313394740';
+const DAILY_CHANNEL_ID     = '1471586957606785249';
+const STAFF_ROLE_ID        = '1471950389971652712';
+const WELCOME_CHANNEL_ID   = '1471954873313394740';
+const QUESTIONS_CHANNEL_ID = '1514779334005489815';
 
 // ─── Welcome Messages ────────────────────────────────────────────────────────
 
@@ -37,6 +38,46 @@ const welcomeMessages = [
     title: '🔮 The crystal spoke your name...',
     desc: (user) => `Before you even knocked, ${user}, the scrying glass showed your face. Fate brought you here. Welcome to the coven — we are glad the universe conspired in your favour tonight. 🕸️`,
   },
+];
+
+// ─── Daily Blessings ─────────────────────────────────────────────────────────
+
+const dailyBlessings = [
+  'May today bring you small moments of pure magic — the kind that sneak up on you and take your breath away. 🌟',
+  'You are protected. You are guided. You are never as alone as you feel. Walk boldly, witch. 🖤',
+  'The universe placed you here, in this body, at this time, for a reason. Trust the timing. 🌙',
+  'May your energy be replenished today. You give so much — may the earth give it back tenfold. 🌿',
+  'Something is shifting in your favour right now, even if you cannot feel it yet. Hold on. ✨',
+  'May your intuition speak clearly today and may you have the courage to listen to it. 🔮',
+  'You are not too much. You are not too little. You are exactly the right amount of magic. 💜',
+  'May your path be lit by moonlight, your steps be steady, and your heart be full. 🌕',
+  'Old energy is leaving. New energy is arriving. Welcome the change — it was called in by your own power. 🕯️',
+  'May every door that opens today lead somewhere worth going. And may you walk through with your head held high. 🚪',
+  'The spell you cast on yourself the hardest is the one you tell about who you are. Rewrite it today. 🕸️',
+  'Rest is not failure. Stillness is not weakness. Even the moon has phases where she hides. 🌑',
+  'May your home feel like a sanctuary, your mind feel like a garden, and your soul feel at peace today. 🌸',
+  'You have survived every hard thing that came before this. You will survive this too — and more than survive. 🌒',
+  'Today\'s blessing: unexpected joy. May it find you when you least expect it and stay longer than you thought. 🌻',
+  'The coven is behind you. Whether near or far, your sisters hold space for your becoming. 🔥',
+  'May your words carry weight today, your presence be felt, and your magic be undeniable. 💫',
+  'You do not have to earn rest, love, or softness. They are your birthright as a being of this earth. 🌙',
+  'Something beautiful is on its way to you. Prepare space for it — in your home, your heart, and your hands. 🌿',
+  'May the day be gentle with you. And if it isn\'t — may you be gentle with yourself. 🖤',
+];
+
+// ─── Weekly Questions ─────────────────────────────────────────────────────────
+
+const weeklyQuestions = [
+  '🌙 **This week\'s question:** What is one thing you\'ve been meaning to release but keep holding onto? What\'s stopping you from letting it go?',
+  '🔮 **This week\'s question:** Which element do you feel most connected to right now — earth, air, fire, or water — and what does that tell you about where you are in your journey?',
+  '🕯️ **This week\'s question:** What does your ideal sacred space look like? Do you have one, or is it still a dream? Tell us what you\'re working with.',
+  '🌿 **This week\'s question:** If you could master one area of witchcraft this year — divination, herbalism, moon magic, spellwork, spirit work — what would it be and why?',
+  '🌑 **This week\'s question:** What drew you to the craft? Was it one moment, a slow pull, or something you can\'t quite explain?',
+  '✨ **This week\'s question:** What\'s a belief, habit, or energy pattern you\'ve been actively working to break? How\'s it going?',
+  '🐦‍⬛ **This week\'s question:** Do you have a spirit animal, familiar, or creature you feel deeply connected to? What do you think it reflects about you?',
+  '🕸️ **This week\'s question:** What\'s a spell, ritual, or practice that has genuinely worked for you — something you\'d recommend to any witch?',
+  '🌕 **This week\'s question:** Moon magic or solar magic — which calls to you more, and how does it show up in your practice?',
+  '💜 **This week\'s question:** What\'s something the coven has taught you, shown you, or helped you feel that you didn\'t expect when you first joined?',
 ];
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -162,9 +203,10 @@ function scheduleDaily(client) {
     const channel = await client.channels.fetch(DAILY_CHANNEL_ID).catch(() => null);
     if (!channel) return console.error('Could not find daily channel.');
 
-    const moon   = getMoonPhase();
-    const herb   = herbs[Math.floor(Math.random() * herbs.length)];
-    const mantra = mantras[Math.floor(Math.random() * mantras.length)];
+    const moon    = getMoonPhase();
+    const herb    = herbs[Math.floor(Math.random() * herbs.length)];
+    const mantra  = mantras[Math.floor(Math.random() * mantras.length)];
+    const blessing = dailyBlessings[Math.floor(Math.random() * dailyBlessings.length)];
 
     const moonEmbed = new EmbedBuilder()
       .setTitle(`${moon.emoji} Tonight's Moon — ${moon.name}`)
@@ -185,9 +227,16 @@ function scheduleDaily(client) {
       .setColor(0x6900ff)
       .setFooter({ text: 'Coventress • Daily Mantra' });
 
+    const blessingEmbed = new EmbedBuilder()
+      .setTitle('🖤 Daily Blessing')
+      .setDescription(blessing)
+      .setColor(0x6900ff)
+      .setFooter({ text: 'Coventress • Daily Blessing' });
+
     await channel.send({ embeds: [moonEmbed] });
     await channel.send({ embeds: [herbEmbed] });
     await channel.send({ embeds: [mantraEmbed] });
+    await channel.send({ embeds: [blessingEmbed] });
 
     setTimeout(postDaily, 24 * 60 * 60 * 1000);
   }
@@ -195,6 +244,46 @@ function scheduleDaily(client) {
   const msUntilFirst = getNextPostTime();
   console.log(`⏰ First daily post in ${Math.round(msUntilFirst / 1000 / 60)} minutes.`);
   setTimeout(postDaily, msUntilFirst);
+}
+
+// ─── Friday Scheduler ────────────────────────────────────────────────────────
+// Posts at 12:00 PM Los Angeles time every Friday
+
+function scheduleFriday(client) {
+  function getNextFridayTime() {
+    const now = new Date();
+    const laTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const target = new Date(laTime);
+    const day = laTime.getDay(); // 0=Sun … 5=Fri
+    let daysUntil = (5 - day + 7) % 7;
+    if (daysUntil === 0 && (laTime.getHours() > 12 || (laTime.getHours() === 12 && laTime.getMinutes() > 0))) {
+      daysUntil = 7;
+    }
+    target.setDate(target.getDate() + daysUntil);
+    target.setHours(12, 0, 0, 0);
+    return target - laTime;
+  }
+
+  async function postFriday() {
+    const channel = await client.channels.fetch(QUESTIONS_CHANNEL_ID).catch(() => null);
+    if (!channel) return console.error('Could not find questions channel.');
+
+    const question = weeklyQuestions[Math.floor(Math.random() * weeklyQuestions.length)];
+
+    const embed = new EmbedBuilder()
+      .setTitle('🔮 Weekly Witch Question')
+      .setDescription(question)
+      .setColor(0x6900ff)
+      .setFooter({ text: 'happy friday witches 🖤' });
+
+    await channel.send({ embeds: [embed] });
+
+    setTimeout(postFriday, 7 * 24 * 60 * 60 * 1000);
+  }
+
+  const msUntilFirst = getNextFridayTime();
+  console.log(`⏰ First Friday question in ${Math.round(msUntilFirst / 1000 / 60 / 60)} hours.`);
+  setTimeout(postFriday, msUntilFirst);
 }
 
 // ─── Commands ────────────────────────────────────────────────────────────────
@@ -274,6 +363,7 @@ client.once('ready', async () => {
   }
 
   scheduleDaily(client);
+  scheduleFriday(client);
 });
 
 // ─── Interactions ─────────────────────────────────────────────────────────────
