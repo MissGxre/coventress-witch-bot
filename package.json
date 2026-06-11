@@ -1,0 +1,12 @@
+{
+  "name": "coventress",
+  "version": "1.0.0",
+  "description": "A witchy Discord bot.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3"
+  }
+}
