@@ -60,7 +60,7 @@ const herbs = [
 ];
 
 const spells = [
-  { name: 'Mirror Spell',          desc: 'Place a small mirror facing outward on your windowsill. Visualise any negativity sent your way being reflected back to its source, neutralised by moonlight.' },
+  { name: 'Mirror Spell',           desc: 'Place a small mirror facing outward on your windowsill. Visualise any negativity sent your way being reflected back to its source, neutralised by moonlight.' },
   { name: 'Candle Intention Ritual', desc: 'Carve your intention into a candle with a pin. Anoint it with oil, light it, and focus your will until it burns down completely.' },
   { name: 'Salt Circle Cleanse',    desc: 'Walk the perimeter of your room sprinkling salt, reciting: *"Only peace may enter here, only love may linger near."* Sweep it up at dawn.' },
   { name: 'Moon Water Blessing',    desc: 'Leave a jar of water under the full moon overnight. Use it to bless objects, anoint yourself, or water plants you want to thrive.' },
@@ -122,8 +122,8 @@ function getMoonPhase() {
   const phase = ((diffDays % lunarCycle) + lunarCycle) % lunarCycle;
 
   const phases = [
-    { name: 'New Moon',        emoji: '🌑', range: [0, 1.85],   desc: 'A time for new beginnings, setting intentions, and planting seeds for what you wish to grow.' },
-    { name: 'Waxing Crescent', emoji: '🌒', range: [1.85, 7.38], desc: 'Energy is building. Take action on your intentions and move toward your goals.' },
+    { name: 'New Moon',        emoji: '🌑', range: [0, 1.85],    desc: 'A time for new beginnings, setting intentions, and planting seeds for what you wish to grow.' },
+    { name: 'Waxing Crescent', emoji: '🌒', range: [1.85, 7.38],  desc: 'Energy is building. Take action on your intentions and move toward your goals.' },
     { name: 'First Quarter',   emoji: '🌓', range: [7.38, 11.07], desc: 'Challenges arise. Push through and commit to the path you\'ve set.' },
     { name: 'Waxing Gibbous',  emoji: '🌔', range: [11.07, 14.77], desc: 'Refine and adjust. You\'re close — make small improvements to your work.' },
     { name: 'Full Moon',       emoji: '🌕', range: [14.77, 16.61], desc: 'Peak power. Perfect for manifestation, divination, charging crystals, and releasing what no longer serves you.' },
@@ -147,29 +147,25 @@ function parseEmoji(str) {
 
 // ─── Daily Scheduler ─────────────────────────────────────────────────────────
 // Posts at 6:00 PM Los Angeles time every day
-// Uses UTC offset: PST = UTC-8, PDT = UTC-7 (auto-adjusted)
 
 function scheduleDaily(client) {
   function getNextPostTime() {
     const now = new Date();
-    // Get current time in LA
     const laTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
     const target = new Date(laTime);
     target.setHours(18, 0, 0, 0);
     if (laTime >= target) target.setDate(target.getDate() + 1);
-    const diff = target - laTime;
-    return diff;
+    return target - laTime;
   }
 
   async function postDaily() {
     const channel = await client.channels.fetch(DAILY_CHANNEL_ID).catch(() => null);
     if (!channel) return console.error('Could not find daily channel.');
 
-    const moon = getMoonPhase();
-    const herb = herbs[Math.floor(Math.random() * herbs.length)];
+    const moon   = getMoonPhase();
+    const herb   = herbs[Math.floor(Math.random() * herbs.length)];
     const mantra = mantras[Math.floor(Math.random() * mantras.length)];
 
-    // Moon Phase
     const moonEmbed = new EmbedBuilder()
       .setTitle(`${moon.emoji} Tonight's Moon — ${moon.name}`)
       .setDescription(moon.desc)
@@ -177,14 +173,12 @@ function scheduleDaily(client) {
       .setColor(0x6900ff)
       .setFooter({ text: 'Coventress • Daily Moon Phase' });
 
-    // Herb of the Day
     const herbEmbed = new EmbedBuilder()
       .setTitle(`🌿 Herb of the Day — ${herb.name}`)
       .setDescription(herb.properties)
       .setColor(0x6900ff)
       .setFooter({ text: 'Coventress • Herb of the Day' });
 
-    // Daily Mantra
     const mantraEmbed = new EmbedBuilder()
       .setTitle('✨ Daily Mantra')
       .setDescription(`*${mantra}*`)
@@ -195,7 +189,6 @@ function scheduleDaily(client) {
     await channel.send({ embeds: [herbEmbed] });
     await channel.send({ embeds: [mantraEmbed] });
 
-    // Schedule next post in 24 hours
     setTimeout(postDaily, 24 * 60 * 60 * 1000);
   }
 
@@ -230,6 +223,12 @@ const commands = [
     .setDescription('Send a blessing to someone')
     .addUserOption(opt =>
       opt.setName('target').setDescription('Who receives the blessing?').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('welcome')
+    .setDescription('📜 Staff only — manually trigger a welcome for a user')
+    .addUserOption(opt =>
+      opt.setName('user').setDescription('Who to welcome?').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('message')
@@ -342,6 +341,33 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ embeds: [embed] });
     }
 
+    // /welcome (staff only)
+    if (interaction.commandName === 'welcome') {
+      const hasRole = interaction.member.roles.cache.has(STAFF_ROLE_ID);
+      if (!hasRole) return interaction.reply({ content: '🖤 You do not have permission to use this command.', ephemeral: true });
+
+      const target = interaction.options.getUser('user');
+      const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+      if (!member) return interaction.reply({ content: 'Could not find that member.', ephemeral: true });
+
+      const welcome    = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
+      const avatarUrl  = target.displayAvatarURL({ size: 256, extension: 'png' });
+
+      const embed = new EmbedBuilder()
+        .setTitle(welcome.title)
+        .setDescription(welcome.desc(target))
+        .setThumbnail(avatarUrl)
+        .setColor(0x6900ff)
+        .setFooter({ text: 'Coventress • Welcome to the Coven' })
+        .setTimestamp();
+
+      const channel = await client.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
+      if (!channel) return interaction.reply({ content: 'Could not find welcome channel.', ephemeral: true });
+
+      await channel.send({ embeds: [embed] });
+      return interaction.reply({ content: `✅ Welcome message sent for ${target}!`, ephemeral: true });
+    }
+
     // /message (staff only)
     if (interaction.commandName === 'message') {
       const hasRole = interaction.member.roles.cache.has(STAFF_ROLE_ID);
@@ -383,7 +409,7 @@ client.on('interactionCreate', async interaction => {
         .setCustomId('msg_color')
         .setLabel('Colour (hex code)')
         .setStyle(TextInputStyle.Short)
-        .setValue('6b21a8')
+        .setValue('6900ff')
         .setRequired(false);
 
       const imageInput = new TextInputBuilder()
@@ -425,7 +451,7 @@ client.on('interactionCreate', async interaction => {
     const thumbnail = interaction.fields.getTextInputValue('msg_thumbnail').trim();
 
     const colorInt = colorRaw ? parseInt(colorRaw, 16) : 0x6900ff;
-    const color = isNaN(colorInt) ? 0x6900ff : colorInt;
+    const color    = isNaN(colorInt) ? 0x6900ff : colorInt;
 
     const embed = new EmbedBuilder()
       .setTitle(title)
@@ -468,7 +494,7 @@ client.on('guildMemberAdd', async member => {
   const channel = await client.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
   if (!channel) return;
 
-  const welcome = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
+  const welcome   = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
   const avatarUrl = member.user.displayAvatarURL({ size: 256, extension: 'png' });
 
   const embed = new EmbedBuilder()
