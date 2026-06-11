@@ -6,12 +6,38 @@ const {
   PermissionFlagsBits
 } = require('discord.js');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const DAILY_CHANNEL_ID = '1471586957606785249';
-const STAFF_ROLE_ID    = '1471950389971652712';
+const DAILY_CHANNEL_ID   = '1471586957606785249';
+const STAFF_ROLE_ID      = '1471950389971652712';
+const WELCOME_CHANNEL_ID = '1471954873313394740';
+
+// ─── Welcome Messages ────────────────────────────────────────────────────────
+
+const welcomeMessages = [
+  {
+    title: '🕯️ A new witch has entered the coven...',
+    desc: (user) => `Welcome, ${user}. The candles flickered as you arrived — a sign the spirits have taken notice. You are exactly where you are meant to be. 🖤`,
+  },
+  {
+    title: '🌑 The coven grows stronger...',
+    desc: (user) => `${user} has crossed the threshold. We have been expecting you. Pull up a chair by the fire, pour yourself something warm, and make yourself at home among your sisters. 🔮`,
+  },
+  {
+    title: '🌿 A kindred spirit arrives...',
+    desc: (user) => `The herbs stirred and the moon shifted — ${user} has found her way to us. Welcome to the coven, witch. May your time here bring you magic, sisterhood, and peace. ✨`,
+  },
+  {
+    title: '🐦‍⬛ The ravens have spoken...',
+    desc: (user) => `They circled overhead before you arrived, ${user}. A good omen. Welcome to this sacred space — you are safe, you are seen, and you are so very welcome here. 🌙`,
+  },
+  {
+    title: '🔮 The crystal spoke your name...',
+    desc: (user) => `Before you even knocked, ${user}, the scrying glass showed your face. Fate brought you here. Welcome to the coven — we are glad the universe conspired in your favour tonight. 🕸️`,
+  },
+];
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -434,6 +460,26 @@ client.on('interactionCreate', async interaction => {
     return interaction.reply({ content: `✅ Message sent to <#${pending.channelId}>`, ephemeral: true });
   }
 
+});
+
+// ─── Welcome ─────────────────────────────────────────────────────────────────
+
+client.on('guildMemberAdd', async member => {
+  const channel = await client.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
+  if (!channel) return;
+
+  const welcome = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
+  const avatarUrl = member.user.displayAvatarURL({ size: 256, extension: 'png' });
+
+  const embed = new EmbedBuilder()
+    .setTitle(welcome.title)
+    .setDescription(welcome.desc(member.user))
+    .setThumbnail(avatarUrl)
+    .setColor(0x4c1d95)
+    .setFooter({ text: 'Coventress • Welcome to the Coven' })
+    .setTimestamp();
+
+  await channel.send({ embeds: [embed] });
 });
 
 // ─── Login ───────────────────────────────────────────────────────────────────
