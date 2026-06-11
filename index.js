@@ -174,21 +174,21 @@ function scheduleDaily(client) {
       .setTitle(`${moon.emoji} Tonight's Moon — ${moon.name}`)
       .setDescription(moon.desc)
       .addFields({ name: 'Cycle Day', value: `Day ${moon.day} of 29`, inline: true })
-      .setColor(0x4c1d95)
+      .setColor(0x6900ff)
       .setFooter({ text: 'Coventress • Daily Moon Phase' });
 
     // Herb of the Day
     const herbEmbed = new EmbedBuilder()
       .setTitle(`🌿 Herb of the Day — ${herb.name}`)
       .setDescription(herb.properties)
-      .setColor(0x3b0764)
+      .setColor(0x6900ff)
       .setFooter({ text: 'Coventress • Herb of the Day' });
 
     // Daily Mantra
     const mantraEmbed = new EmbedBuilder()
       .setTitle('✨ Daily Mantra')
       .setDescription(`*${mantra}*`)
-      .setColor(0x6b21a8)
+      .setColor(0x6900ff)
       .setFooter({ text: 'Coventress • Daily Mantra' });
 
     await channel.send({ embeds: [moonEmbed] });
@@ -291,7 +291,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle(`${moon.emoji} ${moon.name}`)
         .setDescription(moon.desc)
         .addFields({ name: 'Day in Cycle', value: `Day ${moon.day} of 29`, inline: true })
-        .setColor(0x6b21a8)
+        .setColor(0x6900ff)
         .setFooter({ text: 'Coventress • Moon Phase' });
       return interaction.reply({ embeds: [embed] });
     }
@@ -302,7 +302,7 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setTitle(`🌿 Herb of the Day — ${herb.name}`)
         .setDescription(herb.properties)
-        .setColor(0x3b0764)
+        .setColor(0x6900ff)
         .setFooter({ text: 'Coventress • Herb of the Day' });
       return interaction.reply({ embeds: [embed] });
     }
@@ -313,7 +313,7 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setTitle(`✨ ${spell.name}`)
         .setDescription(spell.desc)
-        .setColor(0x4c1d95)
+        .setColor(0x6900ff)
         .setFooter({ text: 'Coventress • Spell of the Moment' });
       return interaction.reply({ embeds: [embed] });
     }
@@ -325,7 +325,7 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setTitle('🖤 A Hex Has Been Cast')
         .setDescription(`${target}, ${hex}`)
-        .setColor(0x1c1c1c)
+        .setColor(0x6900ff)
         .setFooter({ text: `Hexed by ${interaction.user.username} • Coventress` });
       return interaction.reply({ embeds: [embed] });
     }
@@ -337,7 +337,7 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setTitle('🌟 A Blessing Has Been Bestowed')
         .setDescription(`${target}, ${blessing}`)
-        .setColor(0xfde68a)
+        .setColor(0x6900ff)
         .setFooter({ text: `Blessed by ${interaction.user.username} • Coventress` });
       return interaction.reply({ embeds: [embed] });
     }
@@ -424,8 +424,8 @@ client.on('interactionCreate', async interaction => {
     const image     = interaction.fields.getTextInputValue('msg_image').trim();
     const thumbnail = interaction.fields.getTextInputValue('msg_thumbnail').trim();
 
-    const colorInt = colorRaw ? parseInt(colorRaw, 16) : 0x6b21a8;
-    const color = isNaN(colorInt) ? 0x6b21a8 : colorInt;
+    const colorInt = colorRaw ? parseInt(colorRaw, 16) : 0x6900ff;
+    const color = isNaN(colorInt) ? 0x6900ff : colorInt;
 
     const embed = new EmbedBuilder()
       .setTitle(title)
@@ -475,7 +475,7 @@ client.on('guildMemberAdd', async member => {
     .setTitle(welcome.title)
     .setDescription(welcome.desc(member.user))
     .setThumbnail(avatarUrl)
-    .setColor(0x4c1d95)
+    .setColor(0x6900ff)
     .setFooter({ text: 'Coventress • Welcome to the Coven' })
     .setTimestamp();
 
