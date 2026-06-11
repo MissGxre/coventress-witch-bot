@@ -324,6 +324,10 @@ const commands = [
     .setDescription('📜 Staff only — make Coventress send a custom embed')
     .addChannelOption(opt =>
       opt.setName('channel').setDescription('Channel to send the message to').setRequired(true))
+    .addAttachmentOption(opt =>
+      opt.setName('image').setDescription('Full-width banner image (upload from computer)').setRequired(false))
+    .addAttachmentOption(opt =>
+      opt.setName('thumbnail').setDescription('Small top-right image (upload from computer)').setRequired(false))
     .addStringOption(opt =>
       opt.setName('button1_label').setDescription('Label for link button 1').setRequired(false))
     .addStringOption(opt =>
@@ -465,7 +469,9 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '🖤 You do not have permission to use this command.', ephemeral: true });
       }
 
-      const targetChannel = interaction.options.getChannel('channel');
+      const targetChannel  = interaction.options.getChannel('channel');
+      const imageAttach    = interaction.options.getAttachment('image');
+      const thumbAttach    = interaction.options.getAttachment('thumbnail');
 
       const buttons = [];
       for (let i = 1; i <= 3; i++) {
@@ -475,7 +481,12 @@ client.on('interactionCreate', async interaction => {
         if (label && url) buttons.push({ label, url, emoji });
       }
 
-      pendingMessages.set(interaction.user.id, { channelId: targetChannel.id, buttons });
+      pendingMessages.set(interaction.user.id, {
+        channelId: targetChannel.id,
+        buttons,
+        imageUrl:     imageAttach    ? imageAttach.url    : null,
+        thumbnailUrl: thumbAttach    ? thumbAttach.url    : null,
+      });
 
       const modal = new ModalBuilder()
         .setCustomId('coventress_message_modal')
@@ -502,26 +513,18 @@ client.on('interactionCreate', async interaction => {
         .setValue('6900ff')
         .setRequired(false);
 
-      const imageInput = new TextInputBuilder()
-        .setCustomId('msg_image')
-        .setLabel('Image URL — full-width banner (optional)')
+      const footerInput = new TextInputBuilder()
+        .setCustomId('msg_footer')
+        .setLabel('Footer text (optional)')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('https://...')
-        .setRequired(false);
-
-      const thumbnailInput = new TextInputBuilder()
-        .setCustomId('msg_thumbnail')
-        .setLabel('Thumbnail URL — top-right corner (optional)')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('https://...')
+        .setValue('stay witchy')
         .setRequired(false);
 
       modal.addComponents(
         new ActionRowBuilder().addComponents(titleInput),
         new ActionRowBuilder().addComponents(bodyInput),
         new ActionRowBuilder().addComponents(colorInput),
-        new ActionRowBuilder().addComponents(imageInput),
-        new ActionRowBuilder().addComponents(thumbnailInput),
+        new ActionRowBuilder().addComponents(footerInput),
       );
 
       return interaction.showModal(modal);
@@ -534,11 +537,10 @@ client.on('interactionCreate', async interaction => {
     if (!pending) return interaction.reply({ content: 'Something went wrong. Try /message again.', ephemeral: true });
     pendingMessages.delete(interaction.user.id);
 
-    const title     = interaction.fields.getTextInputValue('msg_title');
-    const body      = interaction.fields.getTextInputValue('msg_body');
-    const colorRaw  = interaction.fields.getTextInputValue('msg_color').replace('#', '').trim();
-    const image     = interaction.fields.getTextInputValue('msg_image').trim();
-    const thumbnail = interaction.fields.getTextInputValue('msg_thumbnail').trim();
+    const title    = interaction.fields.getTextInputValue('msg_title');
+    const body     = interaction.fields.getTextInputValue('msg_body');
+    const colorRaw = interaction.fields.getTextInputValue('msg_color').replace('#', '').trim();
+    const footer   = interaction.fields.getTextInputValue('msg_footer').trim();
 
     const colorInt = colorRaw ? parseInt(colorRaw, 16) : 0x6900ff;
     const color    = isNaN(colorInt) ? 0x6900ff : colorInt;
@@ -546,11 +548,11 @@ client.on('interactionCreate', async interaction => {
     const embed = new EmbedBuilder()
       .setTitle(title)
       .setDescription(body)
-      .setColor(color)
-      .setFooter({ text: 'stay witchy' });
+      .setColor(color);
 
-    if (image) embed.setImage(image);
-    if (thumbnail) embed.setThumbnail(thumbnail);
+    if (footer) embed.setFooter({ text: footer });
+    if (pending.imageUrl) embed.setImage(pending.imageUrl);
+    if (pending.thumbnailUrl) embed.setThumbnail(pending.thumbnailUrl);
 
     const messageComponents = [];
     if (pending.buttons && pending.buttons.length > 0) {
