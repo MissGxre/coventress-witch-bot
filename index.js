@@ -459,15 +459,16 @@ function scheduleFriday(client) {
 
     const poll = weeklyPolls[Math.floor(Math.random() * weeklyPolls.length)];
 
-    await channel.send({
+    const msg = await channel.send({
       poll: {
         question: { text: poll.question },
         answers: poll.answers,
-        duration: 168,
+        duration: 72,
         allow_multiselect: false,
       },
     });
 
+    setTimeout(() => msg.delete().catch(() => null), 72 * 60 * 60 * 1000);
     setTimeout(postFriday, 7 * 24 * 60 * 60 * 1000);
   }
 
@@ -500,15 +501,16 @@ function scheduleMonday(client) {
 
     const poll = mondayPolls[Math.floor(Math.random() * mondayPolls.length)];
 
-    await channel.send({
+    const msg = await channel.send({
       poll: {
         question: { text: poll.question },
         answers: poll.answers,
-        duration: 168,
+        duration: 72,
         allow_multiselect: false,
       },
     });
 
+    setTimeout(() => msg.delete().catch(() => null), 72 * 60 * 60 * 1000);
     setTimeout(postMonday, 7 * 24 * 60 * 60 * 1000);
   }
 
