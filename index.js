@@ -337,6 +337,21 @@ const blessings = [
   'may the universe conspire in your favour today 🌟',
 ];
 
+const dailyHoroscopes = [
+  { sign: 'Aries ♈',       reading: 'The fire within you is sharp today — act on instinct, but don\'t burn bridges. A burst of energy mid-afternoon opens a door you\'ve been circling for weeks.' },
+  { sign: 'Taurus ♉',      reading: 'Root down before you reach up. Something you planted in patience is finally ready to be seen. Trust the slow magic — it is the most powerful kind.' },
+  { sign: 'Gemini ♊',      reading: 'Your words carry unusual weight today. Speak carefully and speak boldly. A conversation you\'ve been avoiding holds the key to something lighter.' },
+  { sign: 'Cancer ♋',      reading: 'The moon holds you gently today. Emotions are information — don\'t silence them. Home and comfort are calling, and answering that call is not weakness.' },
+  { sign: 'Leo ♌',         reading: 'Your light is undeniable right now. Let yourself be seen without apology. Someone is watching not to judge, but to be inspired.' },
+  { sign: 'Virgo ♍',       reading: 'The details you\'ve been agonising over will sort themselves. Step back from the map and feel the direction. Your body knows before your mind does.' },
+  { sign: 'Libra ♎',       reading: 'Balance is not a destination — it\'s a daily practice. Something that felt out of reach finds its way back to centre today. A small beauty catches your eye and stays.' },
+  { sign: 'Scorpio ♏',     reading: 'You sense what others miss. Trust that. The undercurrents today are working in your favour. Stillness is your power — let others show their hands first.' },
+  { sign: 'Sagittarius ♐', reading: 'An idea that seemed too big suddenly feels possible. The universe is expanding your vision on purpose. Follow the thread, even if it leads somewhere unexpected.' },
+  { sign: 'Capricorn ♑',   reading: 'Your discipline is your magic today. Something you\'ve been building is closer to complete than it looks. Rest is not falling behind — it\'s part of the climb.' },
+  { sign: 'Aquarius ♒',    reading: 'You\'re ahead of the curve in ways you can\'t fully see yet. An unconventional path is the right one. What feels strange to others feels like home to you.' },
+  { sign: 'Pisces ♓',      reading: 'The veil is thin for you today. Dreams and signs are speaking — write them down. Your intuition is operating at full power. The magic you seek is already within reach.' },
+];
+
 // ─── Moon Phase ──────────────────────────────────────────────────────────────
 
 function getMoonPhase() {
@@ -433,10 +448,11 @@ function scheduleDaily(client) {
       .setColor(0x6900ff)
       .setFooter({ text: 'Coventress • Daily Blessing' });
 
-    await channel.send({ embeds: [moonEmbed] });
-    await channel.send({ embeds: [herbEmbed] });
-    await channel.send({ embeds: [mantraEmbed] });
-    await channel.send({ embeds: [blessingEmbed] });
+    const deleteAfter = 48 * 60 * 60 * 1000;
+    for (const embed of [moonEmbed, herbEmbed, mantraEmbed, blessingEmbed]) {
+      const msg = await channel.send({ embeds: [embed] });
+      setTimeout(() => msg.delete().catch(() => null), deleteAfter);
+    }
 
     setTimeout(postDaily, 24 * 60 * 60 * 1000);
   }
@@ -528,6 +544,42 @@ function scheduleMonday(client) {
   const msUntilFirst = getNextMondayTime();
   console.log(`⏰ First Monday poll in ${Math.round(msUntilFirst / 1000 / 60 / 60)} hours.`);
   setTimeout(postMonday, msUntilFirst);
+}
+
+// ─── Horoscope Scheduler ─────────────────────────────────────────────────────
+// Posts at 12:30 PM Los Angeles time every day
+
+function scheduleHoroscope(client) {
+  function getNextHoroscopeTime() {
+    const now = new Date();
+    const laTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const target = new Date(laTime);
+    target.setHours(12, 30, 0, 0);
+    if (laTime >= target) target.setDate(target.getDate() + 1);
+    return target - laTime;
+  }
+
+  async function postHoroscope() {
+    const channel = await client.channels.fetch(DAILY_CHANNEL_ID).catch(() => null);
+    if (!channel) return console.error('Could not find daily channel.');
+
+    const horoscopes = [...dailyHoroscopes].sort(() => Math.random() - 0.5);
+
+    const embed = new EmbedBuilder()
+      .setTitle('🔮 Daily Horoscope')
+      .setDescription(horoscopes.map(h => `**${h.sign}**\n${h.reading}`).join('\n\n'))
+      .setColor(0x6900ff)
+      .setFooter({ text: 'Coventress • Daily Horoscope' });
+
+    const msg = await channel.send({ embeds: [embed] });
+    setTimeout(() => msg.delete().catch(() => null), 48 * 60 * 60 * 1000);
+
+    setTimeout(postHoroscope, 24 * 60 * 60 * 1000);
+  }
+
+  const msUntilFirst = getNextHoroscopeTime();
+  console.log(`⏰ First horoscope in ${Math.round(msUntilFirst / 1000 / 60)} minutes.`);
+  setTimeout(postHoroscope, msUntilFirst);
 }
 
 // ─── Commands ────────────────────────────────────────────────────────────────
@@ -626,6 +678,7 @@ client.once('ready', async () => {
   }
 
   scheduleDaily(client);
+  scheduleHoroscope(client);
   scheduleFriday(client);
   scheduleMonday(client);
 });
