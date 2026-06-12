@@ -6,13 +6,24 @@ const {
   PermissionFlagsBits
 } = require('discord.js');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages] });
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const DAILY_CHANNEL_ID     = '1471586957606785249';
 const STAFF_ROLE_ID        = '1471950389971652712';
 const WELCOME_CHANNEL_ID   = '1471954873313394740';
+
+const REACT_CHANNEL_IDS = [
+  '1471588316183793815',
+  '1471588142430552184',
+  '1471588014592364655',
+];
+const REACT_EMOJIS = [
+  '<:happy:1514843417769672926>',
+  '<:shush:1514843367375372328>',
+  '<:lol:1515071076303114450>',
+];
 const QUESTIONS_CHANNEL_ID = '1514779334005489815';
 
 // ─── Welcome Messages ────────────────────────────────────────────────────────
@@ -955,5 +966,14 @@ client.on('guildMemberAdd', async member => {
 });
 
 // ─── Login ───────────────────────────────────────────────────────────────────
+
+// ─── Auto React ──────────────────────────────────────────────────────────────
+
+client.on('messageCreate', async message => {
+  if (message.author.bot) return;
+  if (!REACT_CHANNEL_IDS.includes(message.channel.id)) return;
+  const emoji = REACT_EMOJIS[Math.floor(Math.random() * REACT_EMOJIS.length)];
+  await message.react(emoji).catch(() => null);
+});
 
 client.login(process.env.DISCORD_TOKEN);
