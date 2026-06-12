@@ -325,9 +325,11 @@ const commands = [
     .addChannelOption(opt =>
       opt.setName('channel').setDescription('Channel to send the message to').setRequired(true))
     .addAttachmentOption(opt =>
-      opt.setName('image').setDescription('Full-width banner image (upload from computer)').setRequired(false))
+      opt.setName('image').setDescription('Full-width banner image or GIF').setRequired(false))
     .addAttachmentOption(opt =>
-      opt.setName('thumbnail').setDescription('Small top-right image (upload from computer)').setRequired(false))
+      opt.setName('thumbnail').setDescription('Small top-right image').setRequired(false))
+    .addAttachmentOption(opt =>
+      opt.setName('video').setDescription('Video or GIF to attach beneath the embed').setRequired(false))
     .addStringOption(opt =>
       opt.setName('button1_label').setDescription('Label for link button 1').setRequired(false))
     .addStringOption(opt =>
@@ -472,6 +474,7 @@ client.on('interactionCreate', async interaction => {
       const targetChannel  = interaction.options.getChannel('channel');
       const imageAttach    = interaction.options.getAttachment('image');
       const thumbAttach    = interaction.options.getAttachment('thumbnail');
+      const videoAttach    = interaction.options.getAttachment('video');
 
       const buttons = [];
       for (let i = 1; i <= 3; i++) {
@@ -484,8 +487,10 @@ client.on('interactionCreate', async interaction => {
       pendingMessages.set(interaction.user.id, {
         channelId: targetChannel.id,
         buttons,
-        imageUrl:     imageAttach    ? imageAttach.url    : null,
-        thumbnailUrl: thumbAttach    ? thumbAttach.url    : null,
+        imageUrl:     imageAttach ? imageAttach.url  : null,
+        thumbnailUrl: thumbAttach ? thumbAttach.url  : null,
+        videoUrl:     videoAttach ? videoAttach.url  : null,
+        videoName:    videoAttach ? videoAttach.name : null,
       });
 
       const modal = new ModalBuilder()
@@ -520,11 +525,19 @@ client.on('interactionCreate', async interaction => {
         .setValue('stay witchy')
         .setRequired(false);
 
+      const contentInput = new TextInputBuilder()
+        .setCustomId('msg_content')
+        .setLabel('Plain text above embed (optional)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('e.g. 🌙 @everyone or use <:emoji:id> for custom emojis')
+        .setRequired(false);
+
       modal.addComponents(
         new ActionRowBuilder().addComponents(titleInput),
         new ActionRowBuilder().addComponents(bodyInput),
         new ActionRowBuilder().addComponents(colorInput),
         new ActionRowBuilder().addComponents(footerInput),
+        new ActionRowBuilder().addComponents(contentInput),
       );
 
       return interaction.showModal(modal);
@@ -541,6 +554,7 @@ client.on('interactionCreate', async interaction => {
     const body     = interaction.fields.getTextInputValue('msg_body');
     const colorRaw = interaction.fields.getTextInputValue('msg_color').replace('#', '').trim();
     const footer   = interaction.fields.getTextInputValue('msg_footer').trim();
+    const content  = interaction.fields.getTextInputValue('msg_content').trim();
 
     const colorInt = colorRaw ? parseInt(colorRaw, 16) : 0x6900ff;
     const color    = isNaN(colorInt) ? 0x6900ff : colorInt;
@@ -574,7 +588,17 @@ client.on('interactionCreate', async interaction => {
     const targetChannel = await client.channels.fetch(pending.channelId).catch(() => null);
     if (!targetChannel) return interaction.reply({ content: 'Could not find that channel.', ephemeral: true });
 
-    await targetChannel.send({ embeds: [embed], components: messageComponents });
+    const files = [];
+    if (pending.videoUrl) {
+      files.push({ attachment: pending.videoUrl, name: pending.videoName || 'video' });
+    }
+
+    await targetChannel.send({
+      content: content || undefined,
+      embeds: [embed],
+      components: messageComponents,
+      files,
+    });
     return interaction.reply({ content: `✅ Message sent to <#${pending.channelId}>`, ephemeral: true });
   }
 
