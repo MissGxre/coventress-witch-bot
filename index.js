@@ -186,21 +186,21 @@ function parseEmoji(str) {
   return { name: str.trim() };
 }
 
-// ─── Role → Emoji Map ────────────────────────────────────────────────────────
+// ─── Witch Roles (ordered) ───────────────────────────────────────────────────
 
-const ROLE_EMOJIS = {
-  '1514792861143400448': { name: 'tarot',      id: '1514817814412656761' }, // Divination
-  '1514792522323460196': { name: 'planchette', id: '1514817833903718470' }, // Chaos
-  '1514790432146460854': { name: 'lavendar',   id: '1514817822621171822' }, // Green
-  '1514791078677577809': { name: 'hat',        id: '1514817819626307624' }, // Folk
-  '1514791747870392531': { name: 'Shrooms',    id: '1514817812487606352' }, // Cottage
-  '1514791393740984400': { name: 'moth',       id: '1514817824747552989' }, // Hearth
-  '1514791910147887195': { name: 'spellbook',  id: '1514817817390743582' }, // Eclectic
-  '1514792218655981598': { name: 'Moon',       id: '1514817826504839168' }, // Moon
-  '1514792009750020178': { name: 'Sea',        id: '1514817828430151680' }, // Sea
-  '1514792115731828826': { name: 'Solar',      id: '1514817830661521439' }, // Solar
-  '1514789673350860942': { name: 'Witchling',  id: '1514817832154697821' }, // Witchling
-};
+const WITCH_ROLES = [
+  { roleId: '1514792861143400448', emoji: { name: 'tarot',      id: '1514817814412656761' } },
+  { roleId: '1514792522323460196', emoji: { name: 'planchette', id: '1514817833903718470' } },
+  { roleId: '1514790432146460854', emoji: { name: 'lavendar',   id: '1514817822621171822' } },
+  { roleId: '1514791078677577809', emoji: { name: 'hat',        id: '1514817819626307624' } },
+  { roleId: '1514791747870392531', emoji: { name: 'Shrooms',    id: '1514817812487606352' } },
+  { roleId: '1514791393740984400', emoji: { name: 'moth',       id: '1514817824747552989' } },
+  { roleId: '1514791910147887195', emoji: { name: 'spellbook',  id: '1514817817390743582' } },
+  { roleId: '1514792218655981598', emoji: { name: 'Moon',       id: '1514817826504839168' } },
+  { roleId: '1514792115731828826', emoji: { name: 'Solar',      id: '1514817830661521439' } },
+  { roleId: '1514792009750020178', emoji: { name: 'Sea',        id: '1514817828430151680' } },
+  { roleId: '1514789673350860942', emoji: { name: 'Witchling',  id: '1514817832154697821' } },
+];
 
 // ─── Daily Scheduler ─────────────────────────────────────────────────────────
 // Posts at 6:00 PM Los Angeles time every day
@@ -367,27 +367,11 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('rolemenu')
-    .setDescription('📜 Staff only — post a role selection menu with buttons')
+    .setDescription('📜 Staff only — post the witch role selection menu')
     .addChannelOption(opt =>
       opt.setName('channel').setDescription('Channel to post the menu in').setRequired(true))
-    .addRoleOption(opt => opt.setName('role1').setDescription('Role 1').setRequired(true))
-    .addRoleOption(opt => opt.setName('role2').setDescription('Role 2').setRequired(false))
-    .addRoleOption(opt => opt.setName('role3').setDescription('Role 3').setRequired(false))
-    .addRoleOption(opt => opt.setName('role4').setDescription('Role 4').setRequired(false))
-    .addRoleOption(opt => opt.setName('role5').setDescription('Role 5').setRequired(false))
-    .addRoleOption(opt => opt.setName('role6').setDescription('Role 6').setRequired(false))
-    .addRoleOption(opt => opt.setName('role7').setDescription('Role 7').setRequired(false))
-    .addRoleOption(opt => opt.setName('role8').setDescription('Role 8').setRequired(false))
-    .addRoleOption(opt => opt.setName('role9').setDescription('Role 9').setRequired(false))
-    .addRoleOption(opt => opt.setName('role10').setDescription('Role 10').setRequired(false))
-    .addRoleOption(opt => opt.setName('role11').setDescription('Role 11').setRequired(false))
-    .addRoleOption(opt => opt.setName('role12').setDescription('Role 12').setRequired(false))
     .addStringOption(opt =>
-      opt.setName('emojis').setDescription('Emojis for each role, comma-separated in order — e.g. 🔮,🌿,🌙').setRequired(false))
-    .addStringOption(opt =>
-      opt.setName('title').setDescription('Embed title (default: ✨ Choose Your Roles)').setRequired(false))
-    .addStringOption(opt =>
-      opt.setName('description').setDescription('Embed description').setRequired(false)),
+      opt.setName('title').setDescription('Embed title (default: ✨ Choose Your Witch Path)').setRequired(false)),
 
 ].map(c => c.toJSON());
 
@@ -589,36 +573,17 @@ client.on('interactionCreate', async interaction => {
       const hasRole = interaction.member.roles.cache.has(STAFF_ROLE_ID);
       if (!hasRole) return interaction.reply({ content: '🖤 You do not have permission to use this command.', ephemeral: true });
 
-      const channel     = interaction.options.getChannel('channel');
-      const title       = interaction.options.getString('title') || '✨ Choose Your Roles';
-      const description = interaction.options.getString('description') || 'Click a button to assign or remove a role. Click again to remove it.';
-      const emojiStr    = interaction.options.getString('emojis') || '';
-      const emojis      = emojiStr.split(',').map(e => e.trim()).filter(Boolean);
-
-      const entries = [];
-      for (let i = 1; i <= 12; i++) {
-        const role = interaction.options.getRole(`role${i}`);
-        if (!role) continue;
-        entries.push({ role, emoji: emojis[i - 1] || null });
-      }
-
-      if (entries.length === 0) {
-        return interaction.reply({ content: 'You need to provide at least one role.', ephemeral: true });
-      }
+      const channel = interaction.options.getChannel('channel');
+      const title   = interaction.options.getString('title') || '✨ Choose Your Witch Path';
 
       const rows = [];
-      for (let i = 0; i < entries.length; i += 5) {
+      for (let i = 0; i < WITCH_ROLES.length; i += 5) {
         const row = new ActionRowBuilder();
-        for (const entry of entries.slice(i, i + 5)) {
+        for (const entry of WITCH_ROLES.slice(i, i + 5)) {
           const btn = new ButtonBuilder()
-            .setCustomId(`rolemenu:${entry.role.id}`)
-            .setStyle(ButtonStyle.Primary);
-          const emojiObj = ROLE_EMOJIS[entry.role.id] || (entry.emoji ? parseEmoji(entry.emoji) : null);
-          if (emojiObj) {
-            btn.setEmoji(emojiObj);
-          } else {
-            btn.setLabel(entry.role.name);
-          }
+            .setCustomId(`rolemenu:${entry.roleId}`)
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji(entry.emoji);
           row.addComponents(btn);
         }
         rows.push(row);
@@ -626,7 +591,7 @@ client.on('interactionCreate', async interaction => {
 
       const embed = new EmbedBuilder()
         .setTitle(title)
-        .setDescription(description)
+        .setDescription('Click the Corresponding emoji below :arrow_down:\n\n<:tarot:1514817814412656761> Divination Witch\n<:planchette:1514817833903718470> Chaos Witch\n<:lavendar:1514817822621171822> Green Witch\n<:hat:1514817819626307624> Folk Witch\n<:Shrooms:1514817812487606352> Cottage Witch\n<:moth:1514817824747552989> Hearth Witch\n<:spellbook:1514817817390743582> Eclectic Witch\n<:Moon:1514817826504839168> Moon Witch\n<:Solar:1514817830661521439> Solar Witch\n<:Sea:1514817828430151680> Sea Witch\n<:Witchling:1514817832154697821> Witchling\n\n*Not sure which one you are? Check out the pinned announcement from Coventress.*')
         .setColor(0x6900ff)
         .setFooter({ text: 'Coventress • Role Selection' });
 
