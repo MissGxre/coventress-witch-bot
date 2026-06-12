@@ -1019,14 +1019,14 @@ client.on('interactionCreate', async interaction => {
       files.push({ attachment: pending.videoUrl, name: pending.videoName || 'video' });
     }
 
-    const plainText = [content, pending.link].filter(Boolean).join('\n') || undefined;
-
     await targetChannel.send({
-      content: plainText,
+      content: content || undefined,
       embeds: [embed],
       components: messageComponents,
       files,
     });
+
+    if (pending.link) await targetChannel.send({ content: pending.link });
     return interaction.reply({ content: `✅ Message sent to <#${pending.channelId}>`, ephemeral: true });
   }
 
