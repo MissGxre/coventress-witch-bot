@@ -160,6 +160,99 @@ const weeklyPolls = [
   },
 ];
 
+const mondayPolls = [
+  {
+    question: 'Which crystal do you feel most drawn to? 💎',
+    answers: [
+      { poll_media: { text: 'Amethyst',        emoji: { name: '💜' } } },
+      { poll_media: { text: 'Black tourmaline', emoji: { name: '🖤' } } },
+      { poll_media: { text: 'Rose quartz',     emoji: { name: '🩷' } } },
+      { poll_media: { text: 'Clear quartz',    emoji: { name: '✨' } } },
+    ],
+  },
+  {
+    question: 'What is your favourite divination method? 🔮',
+    answers: [
+      { poll_media: { text: 'Tarot',          emoji: { name: '🃏' } } },
+      { poll_media: { text: 'Oracle cards',   emoji: { name: '🌙' } } },
+      { poll_media: { text: 'Pendulum',       emoji: { name: '🔮' } } },
+      { poll_media: { text: 'Scrying',        emoji: { name: '🪬' } } },
+    ],
+  },
+  {
+    question: 'What kind of magic calls to you most? 🕯️',
+    answers: [
+      { poll_media: { text: 'Candle magic',   emoji: { name: '🕯️' } } },
+      { poll_media: { text: 'Sigil magic',    emoji: { name: '✍️' } } },
+      { poll_media: { text: 'Kitchen magic',  emoji: { name: '🌿' } } },
+      { poll_media: { text: 'Dream magic',    emoji: { name: '🌑' } } },
+    ],
+  },
+  {
+    question: 'How do you cleanse your space? 🌿',
+    answers: [
+      { poll_media: { text: 'Smoke cleansing',  emoji: { name: '🌿' } } },
+      { poll_media: { text: 'Sound / bells',    emoji: { name: '🔔' } } },
+      { poll_media: { text: 'Salt',             emoji: { name: '🧂' } } },
+      { poll_media: { text: 'Moon water',       emoji: { name: '🌕' } } },
+    ],
+  },
+  {
+    question: 'Which sabbat is your favourite? 🍂',
+    answers: [
+      { poll_media: { text: 'Samhain',    emoji: { name: '🎃' } } },
+      { poll_media: { text: 'Yule',       emoji: { name: '❄️' } } },
+      { poll_media: { text: 'Beltane',    emoji: { name: '🔥' } } },
+      { poll_media: { text: 'Litha',      emoji: { name: '☀️' } } },
+    ],
+  },
+  {
+    question: 'Do you work with deities? 🌟',
+    answers: [
+      { poll_media: { text: 'Yes, regularly',       emoji: { name: '✨' } } },
+      { poll_media: { text: 'Sometimes',            emoji: { name: '🌙' } } },
+      { poll_media: { text: 'I\'m exploring it',   emoji: { name: '🌱' } } },
+      { poll_media: { text: 'No, not my path',      emoji: { name: '🖤' } } },
+    ],
+  },
+  {
+    question: 'How do you prefer to cast a circle? 🕸️',
+    answers: [
+      { poll_media: { text: 'Physically walk it',   emoji: { name: '🚶' } } },
+      { poll_media: { text: 'Visualise it',         emoji: { name: '👁️' } } },
+      { poll_media: { text: 'With a wand / athame', emoji: { name: '🪄' } } },
+      { poll_media: { text: 'I don\'t cast one',   emoji: { name: '🌿' } } },
+    ],
+  },
+  {
+    question: 'What is your relationship with ancestors / spirits? 🌑',
+    answers: [
+      { poll_media: { text: 'I honour them regularly', emoji: { name: '🕯️' } } },
+      { poll_media: { text: 'Occasionally',            emoji: { name: '🌙' } } },
+      { poll_media: { text: 'Still developing it',     emoji: { name: '🌱' } } },
+      { poll_media: { text: 'Not part of my practice', emoji: { name: '🖤' } } },
+    ],
+  },
+  {
+    question: 'What is your biggest magical goal right now? 💜',
+    answers: [
+      { poll_media: { text: 'Self-healing',        emoji: { name: '💚' } } },
+      { poll_media: { text: 'Deepening knowledge', emoji: { name: '📖' } } },
+      { poll_media: { text: 'Building a practice', emoji: { name: '🕯️' } } },
+      { poll_media: { text: 'Finding community',   emoji: { name: '🤝' } } },
+    ],
+  },
+  {
+    question: 'How do you recharge your magical energy? 🌿',
+    answers: [
+      { poll_media: { text: 'Spending time in nature', emoji: { name: '🌿' } } },
+      { poll_media: { text: 'Meditation',              emoji: { name: '🧘' } } },
+      { poll_media: { text: 'Ritual / spellwork',      emoji: { name: '🕯️' } } },
+      { poll_media: { text: 'Rest and solitude',        emoji: { name: '🌙' } } },
+    ],
+  },
+];
+
 // ─── Data ────────────────────────────────────────────────────────────────────
 
 const herbs = [
@@ -379,8 +472,49 @@ function scheduleFriday(client) {
   }
 
   const msUntilFirst = getNextFridayTime();
-  console.log(`⏰ First Friday question in ${Math.round(msUntilFirst / 1000 / 60 / 60)} hours.`);
+  console.log(`⏰ First Friday poll in ${Math.round(msUntilFirst / 1000 / 60 / 60)} hours.`);
   setTimeout(postFriday, msUntilFirst);
+}
+
+// ─── Monday Scheduler ────────────────────────────────────────────────────────
+// Posts at 12:00 PM Los Angeles time every Monday
+
+function scheduleMonday(client) {
+  function getNextMondayTime() {
+    const now = new Date();
+    const laTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const target = new Date(laTime);
+    const day = laTime.getDay(); // 0=Sun … 1=Mon
+    let daysUntil = (1 - day + 7) % 7;
+    if (daysUntil === 0 && (laTime.getHours() > 12 || (laTime.getHours() === 12 && laTime.getMinutes() > 0))) {
+      daysUntil = 7;
+    }
+    target.setDate(target.getDate() + daysUntil);
+    target.setHours(12, 0, 0, 0);
+    return target - laTime;
+  }
+
+  async function postMonday() {
+    const channel = await client.channels.fetch(QUESTIONS_CHANNEL_ID).catch(() => null);
+    if (!channel) return console.error('Could not find questions channel.');
+
+    const poll = mondayPolls[Math.floor(Math.random() * mondayPolls.length)];
+
+    await channel.send({
+      poll: {
+        question: { text: poll.question },
+        answers: poll.answers,
+        duration: 168,
+        allow_multiselect: false,
+      },
+    });
+
+    setTimeout(postMonday, 7 * 24 * 60 * 60 * 1000);
+  }
+
+  const msUntilFirst = getNextMondayTime();
+  console.log(`⏰ First Monday poll in ${Math.round(msUntilFirst / 1000 / 60 / 60)} hours.`);
+  setTimeout(postMonday, msUntilFirst);
 }
 
 // ─── Commands ────────────────────────────────────────────────────────────────
@@ -480,6 +614,7 @@ client.once('ready', async () => {
 
   scheduleDaily(client);
   scheduleFriday(client);
+  scheduleMonday(client);
 });
 
 // ─── Interactions ─────────────────────────────────────────────────────────────
