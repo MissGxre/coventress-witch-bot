@@ -597,7 +597,7 @@ client.on('interactionCreate', async interaction => {
           const btn = new ButtonBuilder()
             .setCustomId(`rolemenu:${entry.role.id}`)
             .setLabel(entry.role.name)
-            .setStyle(ButtonStyle.Secondary);
+            .setStyle(ButtonStyle.Primary);
           if (entry.emoji) {
             const parsed = parseEmoji(entry.emoji);
             if (parsed) btn.setEmoji(parsed);
