@@ -646,6 +646,8 @@ const commands = [
     .addAttachmentOption(opt =>
       opt.setName('video').setDescription('Video to attach beneath the embed').setRequired(false))
     .addStringOption(opt =>
+      opt.setName('link').setDescription('YouTube, Spotify, or any URL to post beneath the embed').setRequired(false))
+    .addStringOption(opt =>
       opt.setName('button1_label').setDescription('Label for link button 1').setRequired(false))
     .addStringOption(opt =>
       opt.setName('button1_url').setDescription('URL for link button 1').setRequired(false))
@@ -831,6 +833,7 @@ client.on('interactionCreate', async interaction => {
         thumbnailUrl: thumbAttach ? thumbAttach.url  : null,
         videoUrl:     videoAttach ? videoAttach.url  : null,
         videoName:    videoAttach ? videoAttach.name : null,
+        link:         interaction.options.getString('link') || null,
       });
 
       const modal = new ModalBuilder()
@@ -1016,8 +1019,10 @@ client.on('interactionCreate', async interaction => {
       files.push({ attachment: pending.videoUrl, name: pending.videoName || 'video' });
     }
 
+    const plainText = [content, pending.link].filter(Boolean).join('\n') || undefined;
+
     await targetChannel.send({
-      content: content || undefined,
+      content: plainText,
       embeds: [embed],
       components: messageComponents,
       files,
