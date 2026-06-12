@@ -337,6 +337,19 @@ const blessings = [
   'may the universe conspire in your favour today 🌟',
 ];
 
+const predictions = [
+  { title: '🔮 The Path Ahead', text: 'A chapter you have been struggling to close will finally end — not with a dramatic slam, but with a quiet, knowing exhale. What follows is lighter than you expect.' },
+  { title: '🌙 What the Stars See', text: 'Someone unexpected is about to walk into your life and shift something fundamental. You won\'t realise the significance until later, but your gut will know immediately.' },
+  { title: '✨ The Veil Speaks', text: 'A decision you\'ve been avoiding can no longer wait. The universe will gently — then firmly — push you toward it. Trust that you already know the answer.' },
+  { title: '🕯️ The Flame Reveals', text: 'Abundance is coming, but not in the shape you\'ve been expecting. Let go of the specific vision and stay open to how it actually arrives — it will be better.' },
+  { title: '🌿 The Earth Whispers', text: 'A relationship in your life is about to deepen significantly. Whether romantic, friendship, or family — something between you and another person is on the edge of becoming real.' },
+  { title: '🌑 Shadows and Light', text: 'You are about to be tested in patience. It will feel like nothing is moving, but beneath the surface everything is shifting. The breakthrough is closer than the silence suggests.' },
+  { title: '🕸️ Threads of Fate', text: 'Something you lost — an opportunity, a feeling, a version of yourself — is finding its way back to you. This time you will know what to do with it.' },
+  { title: '🌊 The Current Turns', text: 'A period of rest is ending. You have healed more than you know and built more than you can see. What comes next is the payoff for everything you quietly endured.' },
+  { title: '⭐ Written in Stars', text: 'Be careful what you speak aloud this week — your words are unusually powerful right now. An intention set with clarity and conviction will move faster than you expect.' },
+  { title: '🔥 The Fire Speaks', text: 'You are on the edge of something that will change the way you see yourself. It arrives not as a lightning bolt but as a slow, certain knowing that you cannot unfeel once it lands.' },
+];
+
 const dailyHoroscopes = [
   { sign: 'Aries ♈',       reading: 'The fire within you is sharp today — act on instinct, but don\'t burn bridges. A burst of energy mid-afternoon opens a door you\'ve been circling for weeks.' },
   { sign: 'Taurus ♉',      reading: 'Root down before you reach up. Something you planted in patience is finally ready to be seen. Trust the slow magic — it is the most powerful kind.' },
@@ -586,6 +599,10 @@ function scheduleHoroscope(client) {
 
 const commands = [
   new SlashCommandBuilder()
+    .setName('prediction')
+    .setDescription('Ask the coven what the future holds for you'),
+
+  new SlashCommandBuilder()
     .setName('moonphase')
     .setDescription('See the current moon phase and its magical meaning'),
 
@@ -689,6 +706,18 @@ client.on('interactionCreate', async interaction => {
 
   // ── Slash Commands ──
   if (interaction.isChatInputCommand()) {
+
+    // /moonphase
+    // /prediction
+    if (interaction.commandName === 'prediction') {
+      const prediction = predictions[Math.floor(Math.random() * predictions.length)];
+      const embed = new EmbedBuilder()
+        .setTitle(prediction.title)
+        .setDescription(prediction.text)
+        .setColor(0x6900ff)
+        .setFooter({ text: `Requested by ${interaction.user.username} • Coventress` });
+      return interaction.reply({ embeds: [embed] });
+    }
 
     // /moonphase
     if (interaction.commandName === 'moonphase') {
