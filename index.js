@@ -349,6 +349,30 @@ const commands = [
     .addStringOption(opt =>
       opt.setName('button3_emoji').setDescription('Emoji for button 3 — e.g. <:name:id>').setRequired(false)),
 
+  new SlashCommandBuilder()
+    .setName('rolemenu')
+    .setDescription('📜 Staff only — post a role selection menu with buttons')
+    .addChannelOption(opt =>
+      opt.setName('channel').setDescription('Channel to post the menu in').setRequired(true))
+    .addRoleOption(opt => opt.setName('role1').setDescription('Role 1').setRequired(true))
+    .addRoleOption(opt => opt.setName('role2').setDescription('Role 2').setRequired(false))
+    .addRoleOption(opt => opt.setName('role3').setDescription('Role 3').setRequired(false))
+    .addRoleOption(opt => opt.setName('role4').setDescription('Role 4').setRequired(false))
+    .addRoleOption(opt => opt.setName('role5').setDescription('Role 5').setRequired(false))
+    .addRoleOption(opt => opt.setName('role6').setDescription('Role 6').setRequired(false))
+    .addRoleOption(opt => opt.setName('role7').setDescription('Role 7').setRequired(false))
+    .addRoleOption(opt => opt.setName('role8').setDescription('Role 8').setRequired(false))
+    .addRoleOption(opt => opt.setName('role9').setDescription('Role 9').setRequired(false))
+    .addRoleOption(opt => opt.setName('role10').setDescription('Role 10').setRequired(false))
+    .addRoleOption(opt => opt.setName('role11').setDescription('Role 11').setRequired(false))
+    .addRoleOption(opt => opt.setName('role12').setDescription('Role 12').setRequired(false))
+    .addStringOption(opt =>
+      opt.setName('emojis').setDescription('Emojis for each role, comma-separated in order — e.g. 🔮,🌿,🌙').setRequired(false))
+    .addStringOption(opt =>
+      opt.setName('title').setDescription('Embed title (default: ✨ Choose Your Roles)').setRequired(false))
+    .addStringOption(opt =>
+      opt.setName('description').setDescription('Embed description').setRequired(false)),
+
 ].map(c => c.toJSON());
 
 // ─── Pending message data (keyed by user ID) ─────────────────────────────────
@@ -541,6 +565,78 @@ client.on('interactionCreate', async interaction => {
       );
 
       return interaction.showModal(modal);
+    }
+
+    // /rolemenu (staff only)
+    if (interaction.commandName === 'rolemenu') {
+      const hasRole = interaction.member.roles.cache.has(STAFF_ROLE_ID);
+      if (!hasRole) return interaction.reply({ content: '🖤 You do not have permission to use this command.', ephemeral: true });
+
+      const channel     = interaction.options.getChannel('channel');
+      const title       = interaction.options.getString('title') || '✨ Choose Your Roles';
+      const description = interaction.options.getString('description') || 'Click a button to assign or remove a role. Click again to remove it.';
+      const emojiStr    = interaction.options.getString('emojis') || '';
+      const emojis      = emojiStr.split(',').map(e => e.trim()).filter(Boolean);
+
+      const entries = [];
+      for (let i = 1; i <= 12; i++) {
+        const role = interaction.options.getRole(`role${i}`);
+        if (!role) continue;
+        entries.push({ role, emoji: emojis[i - 1] || null });
+      }
+
+      if (entries.length === 0) {
+        return interaction.reply({ content: 'You need to provide at least one role.', ephemeral: true });
+      }
+
+      const rows = [];
+      for (let i = 0; i < entries.length; i += 5) {
+        const row = new ActionRowBuilder();
+        for (const entry of entries.slice(i, i + 5)) {
+          const btn = new ButtonBuilder()
+            .setCustomId(`rolemenu:${entry.role.id}`)
+            .setLabel(entry.role.name)
+            .setStyle(ButtonStyle.Secondary);
+          if (entry.emoji) {
+            const parsed = parseEmoji(entry.emoji);
+            if (parsed) btn.setEmoji(parsed);
+          }
+          row.addComponents(btn);
+        }
+        rows.push(row);
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle(title)
+        .setDescription(description)
+        .setColor(0x6900ff)
+        .setFooter({ text: 'Coventress • Role Selection' });
+
+      const targetChannel = await client.channels.fetch(channel.id).catch(() => null);
+      if (!targetChannel) return interaction.reply({ content: 'Could not find that channel.', ephemeral: true });
+
+      await targetChannel.send({ embeds: [embed], components: rows });
+      return interaction.reply({ content: `✅ Role menu posted in <#${channel.id}>!`, ephemeral: true });
+    }
+  }
+
+  // ── Button — role menu ──
+  if (interaction.isButton() && interaction.customId.startsWith('rolemenu:')) {
+    const roleId = interaction.customId.split(':')[1];
+    const role   = interaction.guild.roles.cache.get(roleId);
+    if (!role) return interaction.reply({ content: 'That role no longer exists.', ephemeral: true });
+
+    try {
+      if (interaction.member.roles.cache.has(roleId)) {
+        await interaction.member.roles.remove(roleId);
+        return interaction.reply({ content: `✨ Removed the **${role.name}** role.`, ephemeral: true });
+      } else {
+        await interaction.member.roles.add(roleId);
+        return interaction.reply({ content: `🌙 You now have the **${role.name}** role!`, ephemeral: true });
+      }
+    } catch (err) {
+      console.error('Role assign error:', err);
+      return interaction.reply({ content: 'Could not update that role — make sure the bot has the **Manage Roles** permission and the role is below the bot\'s highest role.', ephemeral: true });
     }
   }
 
