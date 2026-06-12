@@ -186,6 +186,22 @@ function parseEmoji(str) {
   return { name: str.trim() };
 }
 
+// ─── Role → Emoji Map ────────────────────────────────────────────────────────
+
+const ROLE_EMOJIS = {
+  '1514792861143400448': { name: 'tarot',      id: '1514817814412656761' }, // Divination
+  '1514792522323460196': { name: 'planchette', id: '1514817833903718470' }, // Chaos
+  '1514790432146460854': { name: 'lavendar',   id: '1514817822621171822' }, // Green
+  '1514791078677577809': { name: 'hat',        id: '1514817819626307624' }, // Folk
+  '1514791747870392531': { name: 'Shrooms',    id: '1514817812487606352' }, // Cottage
+  '1514791393740984400': { name: 'moth',       id: '1514817824747552989' }, // Hearth
+  '1514791910147887195': { name: 'spellbook',  id: '1514817817390743582' }, // Eclectic
+  '1514792218655981598': { name: 'Moon',       id: '1514817826504839168' }, // Moon
+  '1514792009750020178': { name: 'Sea',        id: '1514817828430151680' }, // Sea
+  '1514792115731828826': { name: 'Solar',      id: '1514817830661521439' }, // Solar
+  '1514789673350860942': { name: 'Witchling',  id: '1514817832154697821' }, // Witchling
+};
+
 // ─── Daily Scheduler ─────────────────────────────────────────────────────────
 // Posts at 6:00 PM Los Angeles time every day
 
@@ -596,11 +612,12 @@ client.on('interactionCreate', async interaction => {
         for (const entry of entries.slice(i, i + 5)) {
           const btn = new ButtonBuilder()
             .setCustomId(`rolemenu:${entry.role.id}`)
-            .setLabel(entry.role.name)
             .setStyle(ButtonStyle.Primary);
-          if (entry.emoji) {
-            const parsed = parseEmoji(entry.emoji);
-            if (parsed) btn.setEmoji(parsed);
+          const emojiObj = ROLE_EMOJIS[entry.role.id] || (entry.emoji ? parseEmoji(entry.emoji) : null);
+          if (emojiObj) {
+            btn.setEmoji(emojiObj);
+          } else {
+            btn.setLabel(entry.role.name);
           }
           row.addComponents(btn);
         }
