@@ -67,17 +67,97 @@ const dailyBlessings = [
 
 // ─── Weekly Questions ─────────────────────────────────────────────────────────
 
-const weeklyQuestions = [
-  '🌙 **This week\'s question:** What is one thing you\'ve been meaning to release but keep holding onto? What\'s stopping you from letting it go?',
-  '🔮 **This week\'s question:** Which element do you feel most connected to right now — earth, air, fire, or water — and what does that tell you about where you are in your journey?',
-  '🕯️ **This week\'s question:** What does your ideal sacred space look like? Do you have one, or is it still a dream? Tell us what you\'re working with.',
-  '🌿 **This week\'s question:** If you could master one area of witchcraft this year — divination, herbalism, moon magic, spellwork, spirit work — what would it be and why?',
-  '🌑 **This week\'s question:** What drew you to the craft? Was it one moment, a slow pull, or something you can\'t quite explain?',
-  '✨ **This week\'s question:** What\'s a belief, habit, or energy pattern you\'ve been actively working to break? How\'s it going?',
-  '🐦‍⬛ **This week\'s question:** Do you have a spirit animal, familiar, or creature you feel deeply connected to? What do you think it reflects about you?',
-  '🕸️ **This week\'s question:** What\'s a spell, ritual, or practice that has genuinely worked for you — something you\'d recommend to any witch?',
-  '🌕 **This week\'s question:** Moon magic or solar magic — which calls to you more, and how does it show up in your practice?',
-  '💜 **This week\'s question:** What\'s something the coven has taught you, shown you, or helped you feel that you didn\'t expect when you first joined?',
+const weeklyPolls = [
+  {
+    question: 'Which element do you feel most connected to right now? 🌿',
+    answers: [
+      { poll_media: { text: 'Earth', emoji: { name: '🌿' } } },
+      { poll_media: { text: 'Air',   emoji: { name: '🌬️' } } },
+      { poll_media: { text: 'Fire',  emoji: { name: '🔥' } } },
+      { poll_media: { text: 'Water', emoji: { name: '🌊' } } },
+    ],
+  },
+  {
+    question: 'Which moon phase resonates with you most? 🌙',
+    answers: [
+      { poll_media: { text: 'New Moon — fresh starts',    emoji: { name: '🌑' } } },
+      { poll_media: { text: 'Waxing — building energy',   emoji: { name: '🌒' } } },
+      { poll_media: { text: 'Full Moon — peak power',     emoji: { name: '🌕' } } },
+      { poll_media: { text: 'Waning — release & rest',    emoji: { name: '🌘' } } },
+    ],
+  },
+  {
+    question: 'What is your main area of practice? ✨',
+    answers: [
+      { poll_media: { text: 'Divination',   emoji: { name: '🔮' } } },
+      { poll_media: { text: 'Herbalism',    emoji: { name: '🌿' } } },
+      { poll_media: { text: 'Spellwork',    emoji: { name: '🕯️' } } },
+      { poll_media: { text: 'Moon magic',   emoji: { name: '🌙' } } },
+    ],
+  },
+  {
+    question: 'How long have you been practicing? 🕸️',
+    answers: [
+      { poll_media: { text: 'Just starting out',  emoji: { name: '🌱' } } },
+      { poll_media: { text: '1–3 years',           emoji: { name: '🌒' } } },
+      { poll_media: { text: '3–5 years',           emoji: { name: '🌕' } } },
+      { poll_media: { text: '5+ years',            emoji: { name: '⭐' } } },
+    ],
+  },
+  {
+    question: 'Which tool feels most essential to your practice? 🖤',
+    answers: [
+      { poll_media: { text: 'Candles',              emoji: { name: '🕯️' } } },
+      { poll_media: { text: 'Crystals',             emoji: { name: '💎' } } },
+      { poll_media: { text: 'Tarot / Oracle cards', emoji: { name: '🃏' } } },
+      { poll_media: { text: 'Book of Shadows',      emoji: { name: '📖' } } },
+    ],
+  },
+  {
+    question: 'When do you feel most connected to your magic? 🌟',
+    answers: [
+      { poll_media: { text: 'Late at night',    emoji: { name: '🌙' } } },
+      { poll_media: { text: 'At dawn',          emoji: { name: '🌅' } } },
+      { poll_media: { text: 'During storms',    emoji: { name: '⛈️' } } },
+      { poll_media: { text: 'Under the moon',   emoji: { name: '🌕' } } },
+    ],
+  },
+  {
+    question: 'Which season feels most magical to you? 🍂',
+    answers: [
+      { poll_media: { text: 'Spring', emoji: { name: '🌸' } } },
+      { poll_media: { text: 'Summer', emoji: { name: '☀️' } } },
+      { poll_media: { text: 'Autumn', emoji: { name: '🍂' } } },
+      { poll_media: { text: 'Winter', emoji: { name: '❄️' } } },
+    ],
+  },
+  {
+    question: 'What first drew you to witchcraft? 🔮',
+    answers: [
+      { poll_media: { text: 'A book or show',       emoji: { name: '📚' } } },
+      { poll_media: { text: 'Family tradition',     emoji: { name: '🕯️' } } },
+      { poll_media: { text: 'A gut feeling',        emoji: { name: '✨' } } },
+      { poll_media: { text: 'A life event',         emoji: { name: '🌑' } } },
+    ],
+  },
+  {
+    question: 'How do you prefer to practice? 💜',
+    answers: [
+      { poll_media: { text: 'Solo',              emoji: { name: '🌙' } } },
+      { poll_media: { text: 'With others',       emoji: { name: '🤝' } } },
+      { poll_media: { text: 'Both equally',      emoji: { name: '⚖️' } } },
+      { poll_media: { text: 'Still figuring out', emoji: { name: '🌱' } } },
+    ],
+  },
+  {
+    question: 'What is your main intention for your craft? 🌿',
+    answers: [
+      { poll_media: { text: 'Healing',            emoji: { name: '💚' } } },
+      { poll_media: { text: 'Protection',         emoji: { name: '🛡️' } } },
+      { poll_media: { text: 'Manifestation',      emoji: { name: '⭐' } } },
+      { poll_media: { text: 'Spiritual growth',   emoji: { name: '🔮' } } },
+    ],
+  },
 ];
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -284,15 +364,16 @@ function scheduleFriday(client) {
     const channel = await client.channels.fetch(QUESTIONS_CHANNEL_ID).catch(() => null);
     if (!channel) return console.error('Could not find questions channel.');
 
-    const question = weeklyQuestions[Math.floor(Math.random() * weeklyQuestions.length)];
+    const poll = weeklyPolls[Math.floor(Math.random() * weeklyPolls.length)];
 
-    const embed = new EmbedBuilder()
-      .setTitle('🔮 Weekly Witch Question')
-      .setDescription(question)
-      .setColor(0x6900ff)
-      .setFooter({ text: 'happy friday witches 🖤' });
-
-    await channel.send({ embeds: [embed] });
+    await channel.send({
+      poll: {
+        question: { text: poll.question },
+        answers: poll.answers,
+        duration: 168,
+        allow_multiselect: false,
+      },
+    });
 
     setTimeout(postFriday, 7 * 24 * 60 * 60 * 1000);
   }
