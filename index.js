@@ -578,8 +578,6 @@ client.on('interactionCreate', async interaction => {
       if (!hasRole) return interaction.reply({ content: '🖤 You do not have permission to use this command.', ephemeral: true });
 
       const channel = interaction.options.getChannel('channel');
-      const title   = interaction.options.getString('title') || '✨ Choose Your Witch Path';
-
       const title    = interaction.options.getString('title');
       const body     = interaction.options.getString('description');
       const colorRaw = (interaction.options.getString('colour') || '6900ff').replace('#', '').trim();
