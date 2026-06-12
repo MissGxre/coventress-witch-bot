@@ -445,11 +445,11 @@ function scheduleFriday(client) {
     const target = new Date(laTime);
     const day = laTime.getDay(); // 0=Sun … 5=Fri
     let daysUntil = (5 - day + 7) % 7;
-    if (daysUntil === 0 && (laTime.getHours() > 12 || (laTime.getHours() === 12 && laTime.getMinutes() > 0))) {
+    if (daysUntil === 0 && (laTime.getHours() > 12 || (laTime.getHours() === 12 && laTime.getMinutes() >= 30))) {
       daysUntil = 7;
     }
     target.setDate(target.getDate() + daysUntil);
-    target.setHours(12, 0, 0, 0);
+    target.setHours(12, 30, 0, 0);
     return target - laTime;
   }
 
@@ -487,11 +487,11 @@ function scheduleMonday(client) {
     const target = new Date(laTime);
     const day = laTime.getDay(); // 0=Sun … 1=Mon
     let daysUntil = (1 - day + 7) % 7;
-    if (daysUntil === 0 && (laTime.getHours() > 12 || (laTime.getHours() === 12 && laTime.getMinutes() > 0))) {
+    if (daysUntil === 0 && (laTime.getHours() > 12 || (laTime.getHours() === 12 && laTime.getMinutes() >= 30))) {
       daysUntil = 7;
     }
     target.setDate(target.getDate() + daysUntil);
-    target.setHours(12, 0, 0, 0);
+    target.setHours(12, 30, 0, 0);
     return target - laTime;
   }
 
