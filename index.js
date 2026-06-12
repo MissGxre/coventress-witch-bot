@@ -386,8 +386,9 @@ client.once('ready', async () => {
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
     await rest.put(Routes.applicationGuildCommands(client.user.id, '1458192243520176395'), { body: commands });
-    console.log('✅ Slash commands registered globally.');
+    console.log('✅ Slash commands registered.');
   } catch (err) {
     console.error('Failed to register commands:', err);
   }
