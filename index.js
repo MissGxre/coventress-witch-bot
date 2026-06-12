@@ -329,7 +329,7 @@ const commands = [
     .addAttachmentOption(opt =>
       opt.setName('thumbnail').setDescription('Small top-right image').setRequired(false))
     .addAttachmentOption(opt =>
-      opt.setName('video').setDescription('Video or GIF to attach beneath the embed').setRequired(false))
+      opt.setName('gif').setDescription('GIF to attach beneath the embed').setRequired(false))
     .addStringOption(opt =>
       opt.setName('button1_label').setDescription('Label for link button 1').setRequired(false))
     .addStringOption(opt =>
@@ -474,7 +474,7 @@ client.on('interactionCreate', async interaction => {
       const targetChannel  = interaction.options.getChannel('channel');
       const imageAttach    = interaction.options.getAttachment('image');
       const thumbAttach    = interaction.options.getAttachment('thumbnail');
-      const videoAttach    = interaction.options.getAttachment('video');
+      const videoAttach    = interaction.options.getAttachment('gif');
 
       const buttons = [];
       for (let i = 1; i <= 3; i++) {
