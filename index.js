@@ -371,9 +371,7 @@ const commands = [
     .addChannelOption(opt =>
       opt.setName('channel').setDescription('Channel to post the menu in').setRequired(true))
     .addStringOption(opt =>
-      opt.setName('title').setDescription('Embed title').setRequired(true))
-    .addStringOption(opt =>
-      opt.setName('description').setDescription('Embed body text — emoji picker works here').setRequired(true))
+      opt.setName('title').setDescription('Embed title — emoji picker works here').setRequired(true))
     .addStringOption(opt =>
       opt.setName('colour').setDescription('Hex colour code (default: 6900ff)').setRequired(false)),
 
@@ -577,37 +575,25 @@ client.on('interactionCreate', async interaction => {
       const hasRole = interaction.member.roles.cache.has(STAFF_ROLE_ID);
       if (!hasRole) return interaction.reply({ content: '🖤 You do not have permission to use this command.', ephemeral: true });
 
-      const channel = interaction.options.getChannel('channel');
+      const channel  = interaction.options.getChannel('channel');
       const title    = interaction.options.getString('title');
-      const body     = interaction.options.getString('description');
       const colorRaw = (interaction.options.getString('colour') || '6900ff').replace('#', '').trim();
-      const colorInt = parseInt(colorRaw, 16);
-      const color    = isNaN(colorInt) ? 0x6900ff : colorInt;
 
-      const embed = new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(body)
-        .setColor(color)
-        .setFooter({ text: 'Coventress • Role Selection' });
+      pendingMessages.set(interaction.user.id, { channelId: channel.id, title, colorRaw, type: 'rolemenu' });
 
-      const rows = [];
-      for (let i = 0; i < WITCH_ROLES.length; i += 5) {
-        const row = new ActionRowBuilder();
-        for (const entry of WITCH_ROLES.slice(i, i + 5)) {
-          const btn = new ButtonBuilder()
-            .setCustomId(`rolemenu:${entry.roleId}`)
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji(entry.emoji);
-          row.addComponents(btn);
-        }
-        rows.push(row);
-      }
+      const modal = new ModalBuilder()
+        .setCustomId('coventress_rolemenu_modal')
+        .setTitle('Role Menu — Body Text');
 
-      const targetChannel = await client.channels.fetch(channel.id).catch(() => null);
-      if (!targetChannel) return interaction.reply({ content: 'Could not find that channel.', ephemeral: true });
+      const bodyInput = new TextInputBuilder()
+        .setCustomId('rm_body')
+        .setLabel('Message body (press Enter for new lines)')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Write your message here. Use <:name:id> for custom emojis.')
+        .setRequired(true);
 
-      await targetChannel.send({ embeds: [embed], components: rows });
-      return interaction.reply({ content: `✅ Role menu posted in <#${channel.id}>!`, ephemeral: true });
+      modal.addComponents(new ActionRowBuilder().addComponents(bodyInput));
+      return interaction.showModal(modal);
     }
   }
 
@@ -629,6 +615,43 @@ client.on('interactionCreate', async interaction => {
       console.error('Role assign error:', err);
       return interaction.reply({ content: 'Could not update that role — make sure the bot has the **Manage Roles** permission and the role is below the bot\'s highest role.', ephemeral: true });
     }
+  }
+
+  // ── Modal Submit — role menu ──
+  if (interaction.isModalSubmit() && interaction.customId === 'coventress_rolemenu_modal') {
+    const pending = pendingMessages.get(interaction.user.id);
+    if (!pending) return interaction.reply({ content: 'Something went wrong. Try /rolemenu again.', ephemeral: true });
+    pendingMessages.delete(interaction.user.id);
+
+    const body     = interaction.fields.getTextInputValue('rm_body');
+    const colorInt = parseInt(pending.colorRaw, 16);
+    const color    = isNaN(colorInt) ? 0x6900ff : colorInt;
+
+    const embed = new EmbedBuilder()
+      .setTitle(pending.title)
+      .setDescription(body)
+      .setColor(color)
+      .setFooter({ text: 'Coventress • Role Selection' });
+
+    const rows = [];
+    for (let i = 0; i < WITCH_ROLES.length; i += 5) {
+      const row = new ActionRowBuilder();
+      for (const entry of WITCH_ROLES.slice(i, i + 5)) {
+        row.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`rolemenu:${entry.roleId}`)
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji(entry.emoji)
+        );
+      }
+      rows.push(row);
+    }
+
+    const targetChannel = await client.channels.fetch(pending.channelId).catch(() => null);
+    if (!targetChannel) return interaction.reply({ content: 'Could not find that channel.', ephemeral: true });
+
+    await targetChannel.send({ embeds: [embed], components: rows });
+    return interaction.reply({ content: `✅ Role menu posted in <#${pending.channelId}>!`, ephemeral: true });
   }
 
   // ── Modal Submit ──
