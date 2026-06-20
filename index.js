@@ -37,8 +37,15 @@ function streamYoutubeAudio(url) {
   const proc = spawn('yt-dlp', ['-f', 'bestaudio', '-o', '-', '--no-playlist', '--quiet', '--no-warnings', url], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  proc.on('error', err => console.error('yt-dlp spawn error:', err.message));
-  proc.stderr.on('data', d => console.error('yt-dlp:', d.toString()));
+  proc.stderrOutput = '';
+  proc.on('error', err => {
+    proc.stderrOutput += `spawn error: ${err.message}\n`;
+    console.error('yt-dlp spawn error:', err.message);
+  });
+  proc.stderr.on('data', d => {
+    proc.stderrOutput += d.toString();
+    console.error('yt-dlp:', d.toString());
+  });
   return proc;
 }
 
@@ -877,8 +884,9 @@ function playNext(guildId) {
   proc.stdout.once('data', () => { gotAudio = true; });
   proc.on('close', code => {
     if (!gotAudio) {
-      console.error(`yt-dlp produced no audio for "${song.title}" (exit code ${code})`);
-      queue.textChannel?.send(`🔮 Couldn't get audio for **${song.title}** — skipping. (Is yt-dlp installed and up to date?)`).catch(() => null);
+      const detail = proc.stderrOutput.trim().split('\n').slice(-5).join('\n') || `exit code ${code}, no error output`;
+      console.error(`yt-dlp produced no audio for "${song.title}": ${detail}`);
+      queue.textChannel?.send(`🔮 Couldn't get audio for **${song.title}** — skipping.\n\`\`\`${detail.slice(0, 500)}\`\`\``).catch(() => null);
     }
   });
 
