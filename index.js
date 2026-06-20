@@ -18,7 +18,7 @@ const YOUTUBE_URL_RE = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/
 
 function getYoutubeTitle(url) {
   return new Promise((resolve, reject) => {
-    const proc = spawn('yt-dlp', ['--dump-json', '--no-warnings', '--no-playlist', url]);
+    const proc = spawn('yt-dlp', ['--js-runtimes', 'node', '--dump-json', '--no-warnings', '--no-playlist', url]);
     let data = '';
     proc.stdout.on('data', chunk => { data += chunk; });
     proc.on('error', reject);
@@ -34,7 +34,7 @@ function getYoutubeTitle(url) {
 }
 
 function streamYoutubeAudio(url) {
-  const proc = spawn('yt-dlp', ['-f', 'bestaudio', '-o', '-', '--no-playlist', '--quiet', '--no-warnings', url], {
+  const proc = spawn('yt-dlp', ['--js-runtimes', 'node', '-f', 'bestaudio', '-o', '-', '--no-playlist', '--quiet', '--no-warnings', url], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   proc.stderrOutput = '';
