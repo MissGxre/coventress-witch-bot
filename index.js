@@ -49,6 +49,65 @@ function streamYoutubeAudio(url) {
   return proc;
 }
 
+const SPOTIFY_URL_RE   = /^https?:\/\/open\.spotify\.com\/(track|playlist|album)\/([a-zA-Z0-9]+)/i;
+const SPOTIFY_TRACK_CAP = 25;
+
+let spotifyToken       = null;
+let spotifyTokenExpiry = 0;
+
+async function getSpotifyToken() {
+  if (spotifyToken && Date.now() < spotifyTokenExpiry) return spotifyToken;
+
+  const creds = Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64');
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${creds}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials',
+  });
+  if (!res.ok) throw new Error(`Spotify auth failed: ${res.status}`);
+
+  const data = await res.json();
+  spotifyToken       = data.access_token;
+  spotifyTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  return spotifyToken;
+}
+
+async function spotifyFetch(endpoint) {
+  const token = await getSpotifyToken();
+  const res   = await fetch(`https://api.spotify.com/v1${endpoint}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Spotify API error: ${res.status}`);
+  return res.json();
+}
+
+function trackQuery(track) {
+  return `${track.name} ${track.artists?.[0]?.name ?? ''}`.trim();
+}
+
+async function getSpotifyTracks(type, id) {
+  if (type === 'track') {
+    const track = await spotifyFetch(`/tracks/${id}`);
+    return { name: track.name, queries: [trackQuery(track)] };
+  }
+
+  if (type === 'album') {
+    const album   = await spotifyFetch(`/albums/${id}`);
+    const queries = album.tracks.items.slice(0, SPOTIFY_TRACK_CAP).map(trackQuery);
+    return { name: album.name, queries };
+  }
+
+  const playlist = await spotifyFetch(`/playlists/${id}`);
+  const queries  = playlist.tracks.items
+    .filter(item => item.track)
+    .slice(0, SPOTIFY_TRACK_CAP)
+    .map(item => trackQuery(item.track));
+  return { name: playlist.name, queries };
+}
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates] });
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -737,7 +796,7 @@ const commands = [
     .setName('play')
     .setDescription('🎶 Play a song in your voice channel')
     .addStringOption(opt =>
-      opt.setName('song').setDescription('Song name to search, or a YouTube link').setRequired(true)),
+      opt.setName('song').setDescription('Song name, a YouTube link, or a Spotify track/playlist/album link').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('skip')
@@ -1148,16 +1207,34 @@ client.on('interactionCreate', async interaction => {
       await interaction.deferReply();
 
       const query = interaction.options.getString('song');
-      let song;
+      const songsToAdd = [];
+      let spotifySource = null;
       try {
-        if (YOUTUBE_URL_RE.test(query)) {
+        const spotifyMatch = query.match(SPOTIFY_URL_RE);
+        if (spotifyMatch) {
+          if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) {
+            return interaction.editReply('🔮 Spotify links aren\'t set up yet — add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to the bot\'s environment first.');
+          }
+          const [, type, id] = spotifyMatch;
+          const { name, queries } = await getSpotifyTracks(type, id);
+          spotifySource = name;
+
+          for (const q of queries) {
+            const results = await ytSearch(q);
+            const video   = results.videos[0];
+            if (video) songsToAdd.push({ title: video.title, url: video.url, requestedBy: interaction.user.username });
+          }
+          if (songsToAdd.length === 0) {
+            return interaction.editReply(`🔮 Couldn't find any matches on YouTube for **${name}**.`);
+          }
+        } else if (YOUTUBE_URL_RE.test(query)) {
           const title = await getYoutubeTitle(query);
-          song = { title, url: query, requestedBy: interaction.user.username };
+          songsToAdd.push({ title, url: query, requestedBy: interaction.user.username });
         } else {
           const results = await ytSearch(query);
           const video   = results.videos[0];
           if (!video) return interaction.editReply('🔮 No results found for that song.');
-          song = { title: video.title, url: video.url, requestedBy: interaction.user.username };
+          songsToAdd.push({ title: video.title, url: video.url, requestedBy: interaction.user.username });
         }
       } catch (err) {
         console.error('Music search error:', err);
@@ -1167,13 +1244,17 @@ client.on('interactionCreate', async interaction => {
       const { queue, error } = await ensureQueue(interaction, voiceChannel);
       if (error) return interaction.editReply(error);
 
-      queue.songs.push(song);
+      const wasEmpty = queue.songs.length === 0;
+      queue.songs.push(...songsToAdd);
+      if (wasEmpty) playNext(interaction.guild.id);
 
-      if (queue.songs.length === 1) {
-        playNext(interaction.guild.id);
-        return interaction.editReply(`🎶 Now playing **${song.title}**`);
+      if (spotifySource) {
+        return interaction.editReply(`🎶 Queued ${songsToAdd.length} song(s) from **${spotifySource}**.`);
       }
-      return interaction.editReply(`➕ Added **${song.title}** to the queue (position ${queue.songs.length})`);
+      if (wasEmpty) {
+        return interaction.editReply(`🎶 Now playing **${songsToAdd[0].title}**`);
+      }
+      return interaction.editReply(`➕ Added **${songsToAdd[0].title}** to the queue (position ${queue.songs.length})`);
     }
 
     // /skip
