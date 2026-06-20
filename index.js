@@ -66,6 +66,7 @@ async function getSpotifyToken() {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: 'grant_type=client_credentials',
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`Spotify auth failed: ${res.status}`);
 
@@ -79,9 +80,17 @@ async function spotifyFetch(endpoint) {
   const token = await getSpotifyToken();
   const res   = await fetch(`https://api.spotify.com/v1${endpoint}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`Spotify API error: ${res.status}`);
   return res.json();
+}
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out`)), ms)),
+  ]);
 }
 
 function trackQuery(track) {
@@ -1220,18 +1229,22 @@ client.on('interactionCreate', async interaction => {
           spotifySource = name;
 
           for (const q of queries) {
-            const results = await ytSearch(q);
-            const video   = results.videos[0];
-            if (video) songsToAdd.push({ title: video.title, url: video.url, requestedBy: interaction.user.username });
+            try {
+              const results = await withTimeout(ytSearch(q), 15_000, `YouTube search for "${q}"`);
+              const video   = results.videos[0];
+              if (video) songsToAdd.push({ title: video.title, url: video.url, requestedBy: interaction.user.username });
+            } catch (err) {
+              console.error(`Skipping "${q}":`, err.message);
+            }
           }
           if (songsToAdd.length === 0) {
             return interaction.editReply(`🔮 Couldn't find any matches on YouTube for **${name}**.`);
           }
         } else if (YOUTUBE_URL_RE.test(query)) {
-          const title = await getYoutubeTitle(query);
+          const title = await withTimeout(getYoutubeTitle(query), 15_000, 'YouTube lookup');
           songsToAdd.push({ title, url: query, requestedBy: interaction.user.username });
         } else {
-          const results = await ytSearch(query);
+          const results = await withTimeout(ytSearch(query), 15_000, 'YouTube search');
           const video   = results.videos[0];
           if (!video) return interaction.editReply('🔮 No results found for that song.');
           songsToAdd.push({ title: video.title, url: video.url, requestedBy: interaction.user.username });
