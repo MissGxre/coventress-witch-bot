@@ -637,6 +637,12 @@ const commands = [
     .setDescription('📜 Staff only — make Coventress send a custom embed')
     .addChannelOption(opt =>
       opt.setName('channel').setDescription('Channel to send the message to').setRequired(true))
+    .addStringOption(opt =>
+      opt.setName('ping').setDescription('Tag everyone or online members?').setRequired(false)
+        .addChoices(
+          { name: '@everyone', value: 'everyone' },
+          { name: '@here', value: 'here' },
+        ))
     .addAttachmentOption(opt =>
       opt.setName('image').setDescription('Full-width banner image or GIF').setRequired(false))
     .addAttachmentOption(opt =>
@@ -834,6 +840,7 @@ client.on('interactionCreate', async interaction => {
         videoUrl:     videoAttach ? videoAttach.url  : null,
         videoName:    videoAttach ? videoAttach.name : null,
         link:         interaction.options.getString('link') || null,
+        ping:         interaction.options.getString('ping') || null,
       });
 
       const modal = new ModalBuilder()
@@ -1019,11 +1026,15 @@ client.on('interactionCreate', async interaction => {
       files.push({ attachment: pending.videoUrl, name: pending.videoName || 'video' });
     }
 
+    const pingTag      = pending.ping === 'everyone' ? '@everyone' : pending.ping === 'here' ? '@here' : '';
+    const finalContent = [pingTag, content].filter(Boolean).join('\n') || undefined;
+
     await targetChannel.send({
-      content: content || undefined,
+      content: finalContent,
       embeds: [embed],
       components: messageComponents,
       files,
+      allowedMentions: pending.ping ? { parse: ['everyone'] } : undefined,
     });
 
     if (pending.link) await targetChannel.send({ content: pending.link });
