@@ -37,6 +37,7 @@ function streamYoutubeAudio(url) {
   const proc = spawn('yt-dlp', ['-f', 'bestaudio', '-o', '-', '--no-playlist', '--quiet', '--no-warnings', url], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  proc.on('error', err => console.error('yt-dlp spawn error:', err.message));
   proc.stderr.on('data', d => console.error('yt-dlp:', d.toString()));
   return proc;
 }
@@ -827,9 +828,17 @@ async function ensureQueue(interaction, voiceChannel) {
     playNext(interaction.guild.id);
   });
 
+  player.on('error', err => {
+    console.error('Audio player error:', err);
+    queue.songs.shift();
+    playNext(interaction.guild.id);
+  });
+
   connection.on(VoiceConnectionStatus.Disconnected, () => {
     musicQueues.delete(interaction.guild.id);
   });
+
+  connection.on('error', err => console.error('Voice connection error:', err));
 
   return { queue };
 }
