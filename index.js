@@ -5,8 +5,41 @@ const {
   ButtonBuilder, ButtonStyle,
   PermissionFlagsBits
 } = require('discord.js');
+const {
+  joinVoiceChannel, createAudioPlayer, createAudioResource,
+  AudioPlayerStatus, VoiceConnectionStatus, entersState,
+} = require('@discordjs/voice');
+const { spawn } = require('child_process');
+const ytSearch   = require('yt-search');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages] });
+const YOUTUBE_URL_RE = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/i;
+
+function getYoutubeTitle(url) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('yt-dlp', ['--dump-json', '--no-warnings', '--no-playlist', url]);
+    let data = '';
+    proc.stdout.on('data', chunk => { data += chunk; });
+    proc.on('error', reject);
+    proc.on('close', code => {
+      if (code !== 0 || !data) return reject(new Error(`yt-dlp exited with code ${code}`));
+      try {
+        resolve(JSON.parse(data).title);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  });
+}
+
+function streamYoutubeAudio(url) {
+  const proc = spawn('yt-dlp', ['-f', 'bestaudio', '-o', '-', '--no-playlist', '--quiet', '--no-warnings', url], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  proc.stderr.on('data', d => console.error('yt-dlp:', d.toString()));
+  return proc;
+}
+
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates] });
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -690,6 +723,24 @@ const commands = [
     .addStringOption(opt =>
       opt.setName('colour').setDescription('Hex colour code (default: 6900ff)').setRequired(false)),
 
+  new SlashCommandBuilder()
+    .setName('play')
+    .setDescription('🎶 Play a song in your voice channel')
+    .addStringOption(opt =>
+      opt.setName('song').setDescription('Song name to search, or a YouTube link').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('skip')
+    .setDescription('⏭️ Skip the current song'),
+
+  new SlashCommandBuilder()
+    .setName('stop')
+    .setDescription('⏹️ Stop the music and leave the voice channel'),
+
+  new SlashCommandBuilder()
+    .setName('queue')
+    .setDescription('📜 See what songs are queued up'),
+
 ].map(c => c.toJSON());
 
 // ─── Pending message data (keyed by user ID) ─────────────────────────────────
@@ -701,6 +752,31 @@ function formatPollTally(poll) {
   const aTag = poll.aEmoji ? `${poll.aEmoji} ` : '';
   const bTag = poll.bEmoji ? `${poll.bEmoji} ` : '';
   return `${aTag}${poll.aLabel}: ${poll.a.size}   ${bTag}${poll.bLabel}: ${poll.b.size}`;
+}
+
+// ─── Music ───────────────────────────────────────────────────────────────────
+
+const musicQueues = new Map();
+
+function playNext(guildId) {
+  const queue = musicQueues.get(guildId);
+  if (!queue) return;
+
+  if (queue.currentProcess) {
+    queue.currentProcess.kill();
+    queue.currentProcess = null;
+  }
+
+  if (queue.songs.length === 0) {
+    queue.connection.destroy();
+    musicQueues.delete(guildId);
+    return;
+  }
+
+  const song = queue.songs[0];
+  const proc = streamYoutubeAudio(song.url);
+  queue.currentProcess = proc;
+  queue.player.play(createAudioResource(proc.stdout));
 }
 
 // ─── Ready ───────────────────────────────────────────────────────────────────
@@ -942,6 +1018,118 @@ client.on('interactionCreate', async interaction => {
 
       modal.addComponents(new ActionRowBuilder().addComponents(bodyInput));
       return interaction.showModal(modal);
+    }
+
+    // /play
+    if (interaction.commandName === 'play') {
+      const voiceChannel = interaction.member.voice.channel;
+      if (!voiceChannel) {
+        return interaction.reply({ content: '🎵 Join a voice channel first!', ephemeral: true });
+      }
+
+      await interaction.deferReply();
+
+      const query = interaction.options.getString('song');
+      let song;
+      try {
+        if (YOUTUBE_URL_RE.test(query)) {
+          const title = await getYoutubeTitle(query);
+          song = { title, url: query, requestedBy: interaction.user.username };
+        } else {
+          const results = await ytSearch(query);
+          const video   = results.videos[0];
+          if (!video) return interaction.editReply('🔮 No results found for that song.');
+          song = { title: video.title, url: video.url, requestedBy: interaction.user.username };
+        }
+      } catch (err) {
+        console.error('Music search error:', err);
+        return interaction.editReply('🔮 Something went wrong searching for that song.');
+      }
+
+      let queue = musicQueues.get(interaction.guild.id);
+      if (queue && queue.voiceChannelId !== voiceChannel.id) {
+        return interaction.editReply(`🎶 I'm already playing in <#${queue.voiceChannelId}>. Join that channel to add songs.`);
+      }
+
+      if (!queue) {
+        let connection;
+        try {
+          connection = joinVoiceChannel({
+            channelId: voiceChannel.id,
+            guildId: interaction.guild.id,
+            adapterCreator: interaction.guild.voiceAdapterCreator,
+          });
+          await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+        } catch (err) {
+          console.error('Voice connect error:', err);
+          connection?.destroy();
+          return interaction.editReply('🔮 Could not join your voice channel — check my permissions.');
+        }
+
+        const player = createAudioPlayer();
+        connection.subscribe(player);
+
+        queue = { connection, player, voiceChannelId: voiceChannel.id, songs: [] };
+        musicQueues.set(interaction.guild.id, queue);
+
+        player.on(AudioPlayerStatus.Idle, () => {
+          queue.songs.shift();
+          playNext(interaction.guild.id);
+        });
+
+        connection.on(VoiceConnectionStatus.Disconnected, () => {
+          musicQueues.delete(interaction.guild.id);
+        });
+      }
+
+      queue.songs.push(song);
+
+      if (queue.songs.length === 1) {
+        playNext(interaction.guild.id);
+        return interaction.editReply(`🎶 Now playing **${song.title}**`);
+      }
+      return interaction.editReply(`➕ Added **${song.title}** to the queue (position ${queue.songs.length})`);
+    }
+
+    // /skip
+    if (interaction.commandName === 'skip') {
+      const queue = musicQueues.get(interaction.guild.id);
+      if (!queue || queue.songs.length === 0) {
+        return interaction.reply({ content: '🔮 Nothing is playing.', ephemeral: true });
+      }
+      queue.player.stop();
+      return interaction.reply('⏭️ Skipped.');
+    }
+
+    // /stop
+    if (interaction.commandName === 'stop') {
+      const queue = musicQueues.get(interaction.guild.id);
+      if (!queue) {
+        return interaction.reply({ content: '🔮 I\'m not playing anything.', ephemeral: true });
+      }
+      musicQueues.delete(interaction.guild.id);
+      queue.currentProcess?.kill();
+      queue.player.stop();
+      queue.connection.destroy();
+      return interaction.reply('⏹️ Stopped and left the voice channel.');
+    }
+
+    // /queue
+    if (interaction.commandName === 'queue') {
+      const queue = musicQueues.get(interaction.guild.id);
+      if (!queue || queue.songs.length === 0) {
+        return interaction.reply({ content: '🔮 The queue is empty.', ephemeral: true });
+      }
+
+      const list = queue.songs.slice(0, 10).map((s, i) =>
+        i === 0 ? `▶️ **${s.title}** — requested by ${s.requestedBy}` : `${i}. ${s.title} — requested by ${s.requestedBy}`
+      ).join('\n');
+
+      const embed = new EmbedBuilder()
+        .setTitle('🎶 Music Queue')
+        .setDescription(list)
+        .setColor(0x6900ff);
+      return interaction.reply({ embeds: [embed] });
     }
   }
 
