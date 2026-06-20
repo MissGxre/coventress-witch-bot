@@ -10,7 +10,9 @@ const {
   AudioPlayerStatus, VoiceConnectionStatus, entersState,
 } = require('@discordjs/voice');
 const { spawn } = require('child_process');
-const ytSearch   = require('yt-search');
+const fs       = require('fs');
+const path     = require('path');
+const ytSearch = require('yt-search');
 
 const YOUTUBE_URL_RE = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/i;
 
@@ -741,6 +743,24 @@ const commands = [
     .setName('queue')
     .setDescription('📜 See what songs are queued up'),
 
+  new SlashCommandBuilder()
+    .setName('playlist')
+    .setDescription('🎶 Manage saved playlists')
+    .addSubcommand(sub =>
+      sub.setName('save').setDescription('Save the current queue as a playlist')
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
+    .addSubcommand(sub =>
+      sub.setName('load').setDescription('Queue up a saved playlist')
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
+    .addSubcommand(sub =>
+      sub.setName('list').setDescription('List saved playlists'))
+    .addSubcommand(sub =>
+      sub.setName('show').setDescription('Show the songs in a saved playlist')
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
+    .addSubcommand(sub =>
+      sub.setName('delete').setDescription('Delete a saved playlist')
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true))),
+
 ].map(c => c.toJSON());
 
 // ─── Pending message data (keyed by user ID) ─────────────────────────────────
@@ -757,6 +777,61 @@ function formatPollTally(poll) {
 // ─── Music ───────────────────────────────────────────────────────────────────
 
 const musicQueues = new Map();
+
+const PLAYLISTS_FILE = path.join(__dirname, 'playlists.json');
+
+function loadPlaylists() {
+  try {
+    return JSON.parse(fs.readFileSync(PLAYLISTS_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function savePlaylists() {
+  fs.writeFileSync(PLAYLISTS_FILE, JSON.stringify(playlists, null, 2));
+}
+
+const playlists = loadPlaylists();
+
+async function ensureQueue(interaction, voiceChannel) {
+  let queue = musicQueues.get(interaction.guild.id);
+  if (queue && queue.voiceChannelId !== voiceChannel.id) {
+    return { error: `🎶 I'm already playing in <#${queue.voiceChannelId}>. Join that channel to add songs.` };
+  }
+  if (queue) return { queue };
+
+  let connection;
+  try {
+    connection = joinVoiceChannel({
+      channelId: voiceChannel.id,
+      guildId: interaction.guild.id,
+      adapterCreator: interaction.guild.voiceAdapterCreator,
+    });
+    await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+  } catch (err) {
+    console.error('Voice connect error:', err);
+    connection?.destroy();
+    return { error: '🔮 Could not join your voice channel — check my permissions.' };
+  }
+
+  const player = createAudioPlayer();
+  connection.subscribe(player);
+
+  queue = { connection, player, voiceChannelId: voiceChannel.id, songs: [] };
+  musicQueues.set(interaction.guild.id, queue);
+
+  player.on(AudioPlayerStatus.Idle, () => {
+    queue.songs.shift();
+    playNext(interaction.guild.id);
+  });
+
+  connection.on(VoiceConnectionStatus.Disconnected, () => {
+    musicQueues.delete(interaction.guild.id);
+  });
+
+  return { queue };
+}
 
 function playNext(guildId) {
   const queue = musicQueues.get(guildId);
@@ -1050,41 +1125,8 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply('🔮 Something went wrong searching for that song.');
       }
 
-      let queue = musicQueues.get(interaction.guild.id);
-      if (queue && queue.voiceChannelId !== voiceChannel.id) {
-        return interaction.editReply(`🎶 I'm already playing in <#${queue.voiceChannelId}>. Join that channel to add songs.`);
-      }
-
-      if (!queue) {
-        let connection;
-        try {
-          connection = joinVoiceChannel({
-            channelId: voiceChannel.id,
-            guildId: interaction.guild.id,
-            adapterCreator: interaction.guild.voiceAdapterCreator,
-          });
-          await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
-        } catch (err) {
-          console.error('Voice connect error:', err);
-          connection?.destroy();
-          return interaction.editReply('🔮 Could not join your voice channel — check my permissions.');
-        }
-
-        const player = createAudioPlayer();
-        connection.subscribe(player);
-
-        queue = { connection, player, voiceChannelId: voiceChannel.id, songs: [] };
-        musicQueues.set(interaction.guild.id, queue);
-
-        player.on(AudioPlayerStatus.Idle, () => {
-          queue.songs.shift();
-          playNext(interaction.guild.id);
-        });
-
-        connection.on(VoiceConnectionStatus.Disconnected, () => {
-          musicQueues.delete(interaction.guild.id);
-        });
-      }
+      const { queue, error } = await ensureQueue(interaction, voiceChannel);
+      if (error) return interaction.editReply(error);
 
       queue.songs.push(song);
 
@@ -1134,6 +1176,79 @@ client.on('interactionCreate', async interaction => {
         .setDescription(list)
         .setColor(0x6900ff);
       return interaction.reply({ embeds: [embed] });
+    }
+
+    // /playlist
+    if (interaction.commandName === 'playlist') {
+      const sub     = interaction.options.getSubcommand();
+      const guildId = interaction.guild.id;
+      playlists[guildId] = playlists[guildId] || {};
+      const guildPlaylists = playlists[guildId];
+
+      if (sub === 'save') {
+        const name  = interaction.options.getString('name').trim().toLowerCase();
+        const queue = musicQueues.get(guildId);
+        if (!queue || queue.songs.length === 0) {
+          return interaction.reply({ content: '🔮 Nothing is queued right now — play some songs first, then save them as a playlist.', ephemeral: true });
+        }
+        guildPlaylists[name] = queue.songs.map(s => ({ title: s.title, url: s.url }));
+        savePlaylists();
+        return interaction.reply(`📜 Saved **${name}** with ${guildPlaylists[name].length} song(s).`);
+      }
+
+      if (sub === 'load') {
+        const name  = interaction.options.getString('name').trim().toLowerCase();
+        const saved = guildPlaylists[name];
+        if (!saved || saved.length === 0) {
+          return interaction.reply({ content: `🔮 No playlist named **${name}** found.`, ephemeral: true });
+        }
+
+        const voiceChannel = interaction.member.voice.channel;
+        if (!voiceChannel) {
+          return interaction.reply({ content: '🎵 Join a voice channel first!', ephemeral: true });
+        }
+
+        await interaction.deferReply();
+        const { queue, error } = await ensureQueue(interaction, voiceChannel);
+        if (error) return interaction.editReply(error);
+
+        const wasEmpty = queue.songs.length === 0;
+        for (const s of saved) queue.songs.push({ ...s, requestedBy: interaction.user.username });
+        if (wasEmpty) playNext(guildId);
+
+        return interaction.editReply(`🎶 Queued ${saved.length} song(s) from **${name}**.`);
+      }
+
+      if (sub === 'list') {
+        const names = Object.keys(guildPlaylists);
+        if (names.length === 0) {
+          return interaction.reply({ content: '🔮 No playlists saved yet.', ephemeral: true });
+        }
+        const list  = names.map(n => `• **${n}** (${guildPlaylists[n].length} songs)`).join('\n');
+        const embed = new EmbedBuilder().setTitle('📜 Saved Playlists').setDescription(list).setColor(0x6900ff);
+        return interaction.reply({ embeds: [embed] });
+      }
+
+      if (sub === 'show') {
+        const name  = interaction.options.getString('name').trim().toLowerCase();
+        const saved = guildPlaylists[name];
+        if (!saved || saved.length === 0) {
+          return interaction.reply({ content: `🔮 No playlist named **${name}** found.`, ephemeral: true });
+        }
+        const list  = saved.slice(0, 15).map((s, i) => `${i + 1}. ${s.title}`).join('\n');
+        const embed = new EmbedBuilder().setTitle(`📜 Playlist — ${name}`).setDescription(list).setColor(0x6900ff);
+        return interaction.reply({ embeds: [embed] });
+      }
+
+      if (sub === 'delete') {
+        const name = interaction.options.getString('name').trim().toLowerCase();
+        if (!guildPlaylists[name]) {
+          return interaction.reply({ content: `🔮 No playlist named **${name}** found.`, ephemeral: true });
+        }
+        delete guildPlaylists[name];
+        savePlaylists();
+        return interaction.reply(`🗑️ Deleted playlist **${name}**.`);
+      }
     }
   }
 
