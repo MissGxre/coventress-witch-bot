@@ -820,7 +820,7 @@ async function ensureQueue(interaction, voiceChannel) {
   const player = createAudioPlayer();
   connection.subscribe(player);
 
-  queue = { connection, player, voiceChannelId: voiceChannel.id, songs: [] };
+  queue = { connection, player, voiceChannelId: voiceChannel.id, textChannel: interaction.channel, songs: [] };
   musicQueues.set(interaction.guild.id, queue);
 
   player.on(AudioPlayerStatus.Idle, () => {
@@ -830,12 +830,23 @@ async function ensureQueue(interaction, voiceChannel) {
 
   player.on('error', err => {
     console.error('Audio player error:', err);
+    const failedTitle = queue.songs[0]?.title;
+    if (failedTitle) queue.textChannel?.send(`🔮 Had trouble playing **${failedTitle}** — skipping.`).catch(() => null);
     queue.songs.shift();
     playNext(interaction.guild.id);
   });
 
-  connection.on(VoiceConnectionStatus.Disconnected, () => {
-    musicQueues.delete(interaction.guild.id);
+  connection.on(VoiceConnectionStatus.Disconnected, async () => {
+    try {
+      await Promise.race([
+        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+      ]);
+      // Looks like a reconnect is in progress — leave it alone.
+    } catch {
+      musicQueues.delete(interaction.guild.id);
+      connection.destroy();
+    }
   });
 
   connection.on('error', err => console.error('Voice connection error:', err));
@@ -861,6 +872,16 @@ function playNext(guildId) {
   const song = queue.songs[0];
   const proc = streamYoutubeAudio(song.url);
   queue.currentProcess = proc;
+
+  let gotAudio = false;
+  proc.stdout.once('data', () => { gotAudio = true; });
+  proc.on('close', code => {
+    if (!gotAudio) {
+      console.error(`yt-dlp produced no audio for "${song.title}" (exit code ${code})`);
+      queue.textChannel?.send(`🔮 Couldn't get audio for **${song.title}** — skipping. (Is yt-dlp installed and up to date?)`).catch(() => null);
+    }
+  });
+
   queue.player.play(createAudioResource(proc.stdout));
 }
 
