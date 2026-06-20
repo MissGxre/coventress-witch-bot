@@ -671,8 +671,14 @@ const commands = [
       opt.setName('button3_url').setDescription('URL for link button 3').setRequired(false))
     .addStringOption(opt =>
       opt.setName('button3_emoji').setDescription('Emoji for button 3 — e.g. <:name:id>').setRequired(false))
-    .addBooleanOption(opt =>
-      opt.setName('yesno').setDescription('Add Yes/No voting buttons to this message?').setRequired(false)),
+    .addStringOption(opt =>
+      opt.setName('poll_option1_label').setDescription('Label for poll button 1 (pair with option 2 to enable)').setRequired(false))
+    .addStringOption(opt =>
+      opt.setName('poll_option1_emoji').setDescription('Emoji for poll button 1 — e.g. <:name:id>').setRequired(false))
+    .addStringOption(opt =>
+      opt.setName('poll_option2_label').setDescription('Label for poll button 2 (pair with option 1 to enable)').setRequired(false))
+    .addStringOption(opt =>
+      opt.setName('poll_option2_emoji').setDescription('Emoji for poll button 2 — e.g. <:name:id>').setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('rolemenu')
@@ -690,6 +696,12 @@ const commands = [
 
 const pendingMessages = new Map();
 const pollVotes       = new Map();
+
+function formatPollTally(poll) {
+  const aTag = poll.aEmoji ? `${poll.aEmoji} ` : '';
+  const bTag = poll.bEmoji ? `${poll.bEmoji} ` : '';
+  return `${aTag}${poll.aLabel}: ${poll.a.size}   ${bTag}${poll.bLabel}: ${poll.b.size}`;
+}
 
 // ─── Ready ───────────────────────────────────────────────────────────────────
 
@@ -835,6 +847,12 @@ client.on('interactionCreate', async interaction => {
         if (label && url) buttons.push({ label, url, emoji });
       }
 
+      const option1Label = interaction.options.getString('poll_option1_label');
+      const option2Label = interaction.options.getString('poll_option2_label');
+      if ((option1Label && !option2Label) || (!option1Label && option2Label)) {
+        return interaction.reply({ content: 'Please provide labels for both poll options, or neither.', ephemeral: true });
+      }
+
       pendingMessages.set(interaction.user.id, {
         channelId: targetChannel.id,
         buttons,
@@ -844,7 +862,10 @@ client.on('interactionCreate', async interaction => {
         videoName:    videoAttach ? videoAttach.name : null,
         link:         interaction.options.getString('link') || null,
         ping:         interaction.options.getString('ping') || null,
-        yesno:        interaction.options.getBoolean('yesno') || false,
+        option1Label,
+        option1Emoji: interaction.options.getString('poll_option1_emoji') || null,
+        option2Label,
+        option2Emoji: interaction.options.getString('poll_option2_emoji') || null,
       });
 
       const modal = new ModalBuilder()
@@ -924,18 +945,18 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
-  // ── Button — yes/no vote ──
-  if (interaction.isButton() && interaction.customId.startsWith('coventress_yesno:')) {
+  // ── Button — poll vote ──
+  if (interaction.isButton() && interaction.customId.startsWith('coventress_choice:')) {
     const [, choice, pollId] = interaction.customId.split(':');
-    const votes = pollVotes.get(pollId);
-    if (!votes) return interaction.reply({ content: 'This poll has expired.', ephemeral: true });
+    const poll = pollVotes.get(pollId);
+    if (!poll) return interaction.reply({ content: 'This poll has expired.', ephemeral: true });
 
-    votes.yes.delete(interaction.user.id);
-    votes.no.delete(interaction.user.id);
-    votes[choice].add(interaction.user.id);
+    poll.a.delete(interaction.user.id);
+    poll.b.delete(interaction.user.id);
+    poll[choice].add(interaction.user.id);
 
     const embed = EmbedBuilder.from(interaction.message.embeds[0])
-      .setFields({ name: 'Votes', value: `✅ Yes: ${votes.yes.size}   ❌ No: ${votes.no.size}` });
+      .setFields({ name: 'Votes', value: formatPollTally(poll) });
 
     return interaction.update({ embeds: [embed] });
   }
@@ -1038,16 +1059,29 @@ client.on('interactionCreate', async interaction => {
       messageComponents.push(row);
     }
 
-    let pollId = null;
-    if (pending.yesno) {
-      pollId = `${interaction.user.id}-${Date.now()}`;
-      pollVotes.set(pollId, { yes: new Set(), no: new Set() });
+    if (pending.option1Label && pending.option2Label) {
+      const pollId = `${interaction.user.id}-${Date.now()}`;
+      const poll = {
+        a: new Set(), b: new Set(),
+        aLabel: pending.option1Label, aEmoji: pending.option1Emoji,
+        bLabel: pending.option2Label, bEmoji: pending.option2Emoji,
+      };
+      pollVotes.set(pollId, poll);
 
-      const yesBtn = new ButtonBuilder().setCustomId(`coventress_yesno:yes:${pollId}`).setLabel('Yes').setEmoji('✅').setStyle(ButtonStyle.Success);
-      const noBtn  = new ButtonBuilder().setCustomId(`coventress_yesno:no:${pollId}`).setLabel('No').setEmoji('❌').setStyle(ButtonStyle.Danger);
-      messageComponents.push(new ActionRowBuilder().addComponents(yesBtn, noBtn));
+      const btnA = new ButtonBuilder().setCustomId(`coventress_choice:a:${pollId}`).setLabel(pending.option1Label).setStyle(ButtonStyle.Primary);
+      if (pending.option1Emoji) {
+        const parsed = parseEmoji(pending.option1Emoji);
+        if (parsed) btnA.setEmoji(parsed);
+      }
 
-      embed.addFields({ name: 'Votes', value: '✅ Yes: 0   ❌ No: 0' });
+      const btnB = new ButtonBuilder().setCustomId(`coventress_choice:b:${pollId}`).setLabel(pending.option2Label).setStyle(ButtonStyle.Secondary);
+      if (pending.option2Emoji) {
+        const parsed = parseEmoji(pending.option2Emoji);
+        if (parsed) btnB.setEmoji(parsed);
+      }
+
+      messageComponents.push(new ActionRowBuilder().addComponents(btnA, btnB));
+      embed.addFields({ name: 'Votes', value: formatPollTally(poll) });
     }
 
     const targetChannel = await client.channels.fetch(pending.channelId).catch(() => null);
