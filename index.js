@@ -749,9 +749,9 @@ const pendingMessages = new Map();
 const pollVotes       = new Map();
 
 function formatPollTally(poll) {
-  const aTag = poll.aEmoji ? `${poll.aEmoji} ` : '';
-  const bTag = poll.bEmoji ? `${poll.bEmoji} ` : '';
-  return `${aTag}${poll.aLabel}: ${poll.a.size}   ${bTag}${poll.bLabel}: ${poll.b.size}`;
+  const aName = [poll.aEmoji, poll.aLabel].filter(Boolean).join(' ');
+  const bName = [poll.bEmoji, poll.bLabel].filter(Boolean).join(' ');
+  return `${aName}: ${poll.a.size}   ${bName}: ${poll.b.size}`;
 }
 
 // ─── Music ───────────────────────────────────────────────────────────────────
@@ -924,9 +924,13 @@ client.on('interactionCreate', async interaction => {
       }
 
       const option1Label = interaction.options.getString('poll_option1_label');
+      const option1Emoji = interaction.options.getString('poll_option1_emoji');
       const option2Label = interaction.options.getString('poll_option2_label');
-      if ((option1Label && !option2Label) || (!option1Label && option2Label)) {
-        return interaction.reply({ content: 'Please provide labels for both poll options, or neither.', ephemeral: true });
+      const option2Emoji = interaction.options.getString('poll_option2_emoji');
+      const hasOption1 = !!(option1Label || option1Emoji);
+      const hasOption2 = !!(option2Label || option2Emoji);
+      if (hasOption1 !== hasOption2) {
+        return interaction.reply({ content: 'Please give both poll buttons a label or emoji, or neither.', ephemeral: true });
       }
 
       pendingMessages.set(interaction.user.id, {
@@ -939,9 +943,9 @@ client.on('interactionCreate', async interaction => {
         link:         interaction.options.getString('link') || null,
         ping:         interaction.options.getString('ping') || null,
         option1Label,
-        option1Emoji: interaction.options.getString('poll_option1_emoji') || null,
+        option1Emoji,
         option2Label,
-        option2Emoji: interaction.options.getString('poll_option2_emoji') || null,
+        option2Emoji,
       });
 
       const modal = new ModalBuilder()
@@ -1247,7 +1251,7 @@ client.on('interactionCreate', async interaction => {
       messageComponents.push(row);
     }
 
-    if (pending.option1Label && pending.option2Label) {
+    if ((pending.option1Label || pending.option1Emoji) && (pending.option2Label || pending.option2Emoji)) {
       const pollId = `${interaction.user.id}-${Date.now()}`;
       const poll = {
         a: new Set(), b: new Set(),
@@ -1256,17 +1260,13 @@ client.on('interactionCreate', async interaction => {
       };
       pollVotes.set(pollId, poll);
 
-      const btnA = new ButtonBuilder().setCustomId(`coventress_choice:a:${pollId}`).setLabel(pending.option1Label).setStyle(ButtonStyle.Primary);
-      if (pending.option1Emoji) {
-        const parsed = parseEmoji(pending.option1Emoji);
-        if (parsed) btnA.setEmoji(parsed);
-      }
+      const btnA = new ButtonBuilder().setCustomId(`coventress_choice:a:${pollId}`).setStyle(ButtonStyle.Primary);
+      if (pending.option1Label) btnA.setLabel(pending.option1Label);
+      if (pending.option1Emoji) btnA.setEmoji(parseEmoji(pending.option1Emoji));
 
-      const btnB = new ButtonBuilder().setCustomId(`coventress_choice:b:${pollId}`).setLabel(pending.option2Label).setStyle(ButtonStyle.Secondary);
-      if (pending.option2Emoji) {
-        const parsed = parseEmoji(pending.option2Emoji);
-        if (parsed) btnB.setEmoji(parsed);
-      }
+      const btnB = new ButtonBuilder().setCustomId(`coventress_choice:b:${pollId}`).setStyle(ButtonStyle.Secondary);
+      if (pending.option2Label) btnB.setLabel(pending.option2Label);
+      if (pending.option2Emoji) btnB.setEmoji(parseEmoji(pending.option2Emoji));
 
       messageComponents.push(new ActionRowBuilder().addComponents(btnA, btnB));
       embed.addFields({ name: 'Votes', value: formatPollTally(poll) });
