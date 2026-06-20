@@ -807,6 +807,7 @@ async function ensureQueue(interaction, voiceChannel) {
       channelId: voiceChannel.id,
       guildId: interaction.guild.id,
       adapterCreator: interaction.guild.voiceAdapterCreator,
+      selfDeaf: false,
     });
     await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
   } catch (err) {
