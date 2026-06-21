@@ -881,7 +881,11 @@ const musicQueues = new Map();
 const SONGS_PER_GIF = 5;
 
 const COVEN_RADIO_GIFS = [
-  // TODO: add 5 gif URLs here
+  'https://i.ibb.co/JWF3d1nS/music-5.gif',
+  'https://i.ibb.co/Dg62JZF5/music-3.gif',
+  'https://i.ibb.co/vC1vXnxT/music-4.gif',
+  'https://i.ibb.co/mr9WQr5b/music-1.gif',
+  'https://i.ibb.co/23tr5fbN/music-2.gif',
 ];
 
 const COVEN_RADIO_MESSAGES = [
