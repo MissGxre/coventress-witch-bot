@@ -35,7 +35,7 @@ function getYoutubeTitle(url) {
 }
 
 function streamYoutubeAudio(url) {
-  const proc = spawn('yt-dlp', ['--js-runtimes', 'node', '-f', 'bestaudio', '-o', '-', '--no-playlist', '--quiet', '--no-warnings', url], {
+  const proc = spawn('yt-dlp', ['--js-runtimes', 'node', '-f', 'bestaudio', '-o', '-', '--no-playlist', url], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   proc.stderrOutput = '';
