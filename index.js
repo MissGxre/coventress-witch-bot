@@ -855,7 +855,11 @@ const commands = [
         .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
     .addSubcommand(sub =>
       sub.setName('delete').setDescription('Delete a saved playlist')
-        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true))),
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
+    .addSubcommand(sub =>
+      sub.setName('rename').setDescription('Rename a saved playlist')
+        .addStringOption(opt => opt.setName('name').setDescription('Current playlist name').setRequired(true))
+        .addStringOption(opt => opt.setName('new_name').setDescription('New playlist name').setRequired(true))),
 
 ].map(c => c.toJSON());
 
@@ -1460,6 +1464,21 @@ client.on('interactionCreate', async interaction => {
         delete guildPlaylists[name];
         savePlaylists();
         return replyTTL(interaction, `🗑️ Deleted playlist **${name}**.`);
+      }
+
+      if (sub === 'rename') {
+        const name    = interaction.options.getString('name').trim().toLowerCase();
+        const newName = interaction.options.getString('new_name').trim().toLowerCase();
+        if (!guildPlaylists[name]) {
+          return interaction.reply({ content: `🔮 No playlist named **${name}** found.`, ephemeral: true });
+        }
+        if (guildPlaylists[newName]) {
+          return interaction.reply({ content: `🔮 A playlist named **${newName}** already exists.`, ephemeral: true });
+        }
+        guildPlaylists[newName] = guildPlaylists[name];
+        delete guildPlaylists[name];
+        savePlaylists();
+        return replyTTL(interaction, `📜 Renamed **${name}** to **${newName}**.`);
       }
     }
   }
