@@ -15,6 +15,7 @@ const path     = require('path');
 const ytSearch = require('yt-search');
 
 const YOUTUBE_URL_RE = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/i;
+const YOUTUBE_ID_RE  = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{6,})/i;
 
 function getYoutubeTitle(url) {
   return new Promise((resolve, reject) => {
@@ -826,6 +827,9 @@ const commands = [
       sub.setName('save').setDescription('Save the current queue as a playlist')
         .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
     .addSubcommand(sub =>
+      sub.setName('add').setDescription('Add songs to a playlist without playing them')
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name (created if new)').setRequired(true)))
+    .addSubcommand(sub =>
       sub.setName('load').setDescription('Queue up a saved playlist')
         .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
     .addSubcommand(sub =>
@@ -1333,6 +1337,25 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply(`📜 Saved **${name}** with ${guildPlaylists[name].length} song(s).`);
       }
 
+      if (sub === 'add') {
+        const name = interaction.options.getString('name').trim().toLowerCase();
+        pendingMessages.set(interaction.user.id, { type: 'playlist_add', name, guildId });
+
+        const modal = new ModalBuilder()
+          .setCustomId('coventress_playlist_add_modal')
+          .setTitle(`Add songs to "${name}"`.slice(0, 45));
+
+        const songsInput = new TextInputBuilder()
+          .setCustomId('playlist_songs')
+          .setLabel('Songs — one per line')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('Song name or YouTube link, one per line')
+          .setRequired(true);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(songsInput));
+        return interaction.showModal(modal);
+      }
+
       if (sub === 'load') {
         const name  = interaction.options.getString('name').trim().toLowerCase();
         const saved = guildPlaylists[name];
@@ -1426,6 +1449,43 @@ client.on('interactionCreate', async interaction => {
   }
 
   // ── Modal Submit — role menu ──
+  if (interaction.isModalSubmit() && interaction.customId === 'coventress_playlist_add_modal') {
+    const pending = pendingMessages.get(interaction.user.id);
+    if (!pending) return interaction.reply({ content: 'Something went wrong. Try /playlist add again.', ephemeral: true });
+    pendingMessages.delete(interaction.user.id);
+
+    await interaction.deferReply({ ephemeral: true });
+
+    const lines = interaction.fields.getTextInputValue('playlist_songs')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean);
+
+    const added = [];
+    for (const line of lines) {
+      try {
+        const videoId = line.match(YOUTUBE_ID_RE)?.[1];
+        const video = videoId
+          ? await withTimeout(ytSearch({ videoId }), 15_000, `lookup for "${line}"`)
+          : (await withTimeout(ytSearch(line), 15_000, `search for "${line}"`)).videos[0];
+        if (video) added.push({ title: video.title, url: video.url });
+      } catch (err) {
+        console.error(`Skipping "${line}":`, err.message);
+      }
+    }
+
+    if (added.length === 0) {
+      return interaction.editReply('🔮 Couldn\'t resolve any of those to a YouTube video.');
+    }
+
+    playlists[pending.guildId] = playlists[pending.guildId] || {};
+    const guildPlaylists = playlists[pending.guildId];
+    guildPlaylists[pending.name] = [...(guildPlaylists[pending.name] || []), ...added];
+    savePlaylists();
+
+    return interaction.editReply(`📜 Added ${added.length}/${lines.length} song(s) to **${pending.name}** (${guildPlaylists[pending.name].length} total).`);
+  }
+
   if (interaction.isModalSubmit() && interaction.customId === 'coventress_rolemenu_modal') {
     const pending = pendingMessages.get(interaction.user.id);
     if (!pending) return interaction.reply({ content: 'Something went wrong. Try /rolemenu again.', ephemeral: true });
