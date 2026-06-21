@@ -844,21 +844,21 @@ const commands = [
         .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
     .addSubcommand(sub =>
       sub.setName('add').setDescription('Add songs to a playlist without playing them')
-        .addStringOption(opt => opt.setName('name').setDescription('Playlist name (created if new)').setRequired(true)))
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name (created if new)').setRequired(true).setAutocomplete(true)))
     .addSubcommand(sub =>
       sub.setName('load').setDescription('Queue up a saved playlist')
-        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true).setAutocomplete(true)))
     .addSubcommand(sub =>
       sub.setName('list').setDescription('List saved playlists'))
     .addSubcommand(sub =>
       sub.setName('show').setDescription('Show the songs in a saved playlist')
-        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true).setAutocomplete(true)))
     .addSubcommand(sub =>
       sub.setName('delete').setDescription('Delete a saved playlist')
-        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true)))
+        .addStringOption(opt => opt.setName('name').setDescription('Playlist name').setRequired(true).setAutocomplete(true)))
     .addSubcommand(sub =>
       sub.setName('rename').setDescription('Rename a saved playlist')
-        .addStringOption(opt => opt.setName('name').setDescription('Current playlist name').setRequired(true))
+        .addStringOption(opt => opt.setName('name').setDescription('Current playlist name').setRequired(true).setAutocomplete(true))
         .addStringOption(opt => opt.setName('new_name').setDescription('New playlist name').setRequired(true))),
 
 ].map(c => c.toJSON());
@@ -1041,6 +1041,20 @@ client.once('ready', async () => {
 // ─── Interactions ─────────────────────────────────────────────────────────────
 
 client.on('interactionCreate', async interaction => {
+
+  // ── Autocomplete ──
+  if (interaction.isAutocomplete()) {
+    if (interaction.commandName === 'playlist') {
+      const guildPlaylists = playlists[interaction.guild.id] || {};
+      const focused = interaction.options.getFocused().toLowerCase();
+      const choices = Object.keys(guildPlaylists)
+        .filter(name => name.includes(focused))
+        .slice(0, 25)
+        .map(name => ({ name, value: name }));
+      return interaction.respond(choices);
+    }
+    return interaction.respond([]);
+  }
 
   // ── Slash Commands ──
   if (interaction.isChatInputCommand()) {
