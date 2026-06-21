@@ -900,7 +900,8 @@ function maybeSendRadioGif(queue) {
   queue.textChannel?.send({ embeds: [embed] }).catch(() => null);
 }
 
-const PLAYLISTS_FILE = path.join(__dirname, 'playlists.json');
+const DATA_DIR        = process.env.DATA_DIR || __dirname;
+const PLAYLISTS_FILE  = path.join(DATA_DIR, 'playlists.json');
 
 function loadPlaylists() {
   try {
@@ -911,6 +912,7 @@ function loadPlaylists() {
 }
 
 function savePlaylists() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(PLAYLISTS_FILE, JSON.stringify(playlists, null, 2));
 }
 
