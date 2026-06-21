@@ -94,6 +94,22 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
+const MUSIC_REPLY_TTL = 60 * 60 * 1000;
+
+function expireReply(interaction) {
+  setTimeout(() => interaction.deleteReply().catch(() => null), MUSIC_REPLY_TTL);
+}
+
+async function replyTTL(interaction, options) {
+  await interaction.reply(options);
+  expireReply(interaction);
+}
+
+async function editReplyTTL(interaction, options) {
+  await interaction.editReply(options);
+  expireReply(interaction);
+}
+
 function trackQuery(track) {
   return `${track.name} ${track.artists?.[0]?.name ?? ''}`.trim();
 }
@@ -1228,7 +1244,7 @@ client.on('interactionCreate', async interaction => {
         const spotifyMatch = query.match(SPOTIFY_URL_RE);
         if (spotifyMatch) {
           if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) {
-            return interaction.editReply('🔮 Spotify links aren\'t set up yet — add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to the bot\'s environment first.');
+            return editReplyTTL(interaction, '🔮 Spotify links aren\'t set up yet — add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to the bot\'s environment first.');
           }
           const [, type, id] = spotifyMatch;
           const { name, queries } = await getSpotifyTracks(type, id);
@@ -1244,7 +1260,7 @@ client.on('interactionCreate', async interaction => {
             }
           }
           if (songsToAdd.length === 0) {
-            return interaction.editReply(`🔮 Couldn't find any matches on YouTube for **${name}**.`);
+            return editReplyTTL(interaction, `🔮 Couldn't find any matches on YouTube for **${name}**.`);
           }
         } else if (YOUTUBE_URL_RE.test(query)) {
           const title = await withTimeout(getYoutubeTitle(query), 15_000, 'YouTube lookup');
@@ -1252,28 +1268,28 @@ client.on('interactionCreate', async interaction => {
         } else {
           const results = await withTimeout(ytSearch(query), 15_000, 'YouTube search');
           const video   = results.videos[0];
-          if (!video) return interaction.editReply('🔮 No results found for that song.');
+          if (!video) return editReplyTTL(interaction, '🔮 No results found for that song.');
           songsToAdd.push({ title: video.title, url: video.url, requestedBy: interaction.user.username });
         }
       } catch (err) {
         console.error('Music search error:', err);
-        return interaction.editReply('🔮 Something went wrong searching for that song.');
+        return editReplyTTL(interaction, '🔮 Something went wrong searching for that song.');
       }
 
       const { queue, error } = await queuePromise;
-      if (error) return interaction.editReply(error);
+      if (error) return editReplyTTL(interaction, error);
 
       const wasEmpty = queue.songs.length === 0;
       queue.songs.push(...songsToAdd);
       if (wasEmpty) playNext(interaction.guild.id);
 
       if (spotifySource) {
-        return interaction.editReply(`🎶 Queued ${songsToAdd.length} song(s) from **${spotifySource}**.`);
+        return editReplyTTL(interaction, `🎶 Queued ${songsToAdd.length} song(s) from **${spotifySource}**.`);
       }
       if (wasEmpty) {
-        return interaction.editReply(`🎶 Now playing **${songsToAdd[0].title}**`);
+        return editReplyTTL(interaction, `🎶 Now playing **${songsToAdd[0].title}**`);
       }
-      return interaction.editReply(`➕ Added **${songsToAdd[0].title}** to the queue (position ${queue.songs.length})`);
+      return editReplyTTL(interaction, `➕ Added **${songsToAdd[0].title}** to the queue (position ${queue.songs.length})`);
     }
 
     // /skip
@@ -1283,7 +1299,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '🔮 Nothing is playing.', ephemeral: true });
       }
       queue.player.stop();
-      return interaction.reply('⏭️ Skipped.');
+      return replyTTL(interaction, '⏭️ Skipped.');
     }
 
     // /stop
@@ -1296,7 +1312,7 @@ client.on('interactionCreate', async interaction => {
       queue.currentProcess?.kill();
       queue.player.stop();
       queue.connection.destroy();
-      return interaction.reply('⏹️ Stopped and left the voice channel.');
+      return replyTTL(interaction, '⏹️ Stopped and left the voice channel.');
     }
 
     // /queue
@@ -1316,7 +1332,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('🎶 Music Queue')
         .setDescription(list + more)
         .setColor(0x6900ff);
-      return interaction.reply({ embeds: [embed] });
+      return replyTTL(interaction, { embeds: [embed] });
     }
 
     // /playlist
@@ -1334,7 +1350,7 @@ client.on('interactionCreate', async interaction => {
         }
         guildPlaylists[name] = queue.songs.map(s => ({ title: s.title, url: s.url }));
         savePlaylists();
-        return interaction.reply(`📜 Saved **${name}** with ${guildPlaylists[name].length} song(s).`);
+        return replyTTL(interaction, `📜 Saved **${name}** with ${guildPlaylists[name].length} song(s).`);
       }
 
       if (sub === 'add') {
@@ -1370,13 +1386,13 @@ client.on('interactionCreate', async interaction => {
 
         await interaction.deferReply();
         const { queue, error } = await ensureQueue(interaction, voiceChannel);
-        if (error) return interaction.editReply(error);
+        if (error) return editReplyTTL(interaction, error);
 
         const wasEmpty = queue.songs.length === 0;
         for (const s of saved) queue.songs.push({ ...s, requestedBy: interaction.user.username });
         if (wasEmpty) playNext(guildId);
 
-        return interaction.editReply(`🎶 Queued ${saved.length} song(s) from **${name}**.`);
+        return editReplyTTL(interaction, `🎶 Queued ${saved.length} song(s) from **${name}**.`);
       }
 
       if (sub === 'list') {
@@ -1386,7 +1402,7 @@ client.on('interactionCreate', async interaction => {
         }
         const list  = names.map(n => `• **${n}** (${guildPlaylists[n].length} songs)`).join('\n');
         const embed = new EmbedBuilder().setTitle('📜 Saved Playlists').setDescription(list).setColor(0x6900ff);
-        return interaction.reply({ embeds: [embed] });
+        return replyTTL(interaction, { embeds: [embed] });
       }
 
       if (sub === 'show') {
@@ -1397,7 +1413,7 @@ client.on('interactionCreate', async interaction => {
         }
         const list  = saved.slice(0, 15).map((s, i) => `${i + 1}. ${s.title}`).join('\n');
         const embed = new EmbedBuilder().setTitle(`📜 Playlist — ${name}`).setDescription(list).setColor(0x6900ff);
-        return interaction.reply({ embeds: [embed] });
+        return replyTTL(interaction, { embeds: [embed] });
       }
 
       if (sub === 'delete') {
@@ -1407,7 +1423,7 @@ client.on('interactionCreate', async interaction => {
         }
         delete guildPlaylists[name];
         savePlaylists();
-        return interaction.reply(`🗑️ Deleted playlist **${name}**.`);
+        return replyTTL(interaction, `🗑️ Deleted playlist **${name}**.`);
       }
     }
   }
