@@ -874,6 +874,28 @@ function formatPollTally(poll) {
 
 const musicQueues = new Map();
 
+const SONGS_PER_GIF = 5;
+
+const COVEN_RADIO_GIFS = [
+  // TODO: add 5 gif URLs here
+];
+
+const COVEN_RADIO_MESSAGES = [
+  '🌙 I love human music.',
+  '🎶 This one stirs something ancient in me.',
+  '✨ Mortal melodies never get old.',
+  '🔮 The coven approves of this track.',
+  '🖤 Five songs in and I\'m still vibing with you all.',
+];
+
+function maybeSendRadioGif(queue) {
+  if (COVEN_RADIO_GIFS.length === 0) return;
+  const gif     = COVEN_RADIO_GIFS[Math.floor(Math.random() * COVEN_RADIO_GIFS.length)];
+  const message = COVEN_RADIO_MESSAGES[Math.floor(Math.random() * COVEN_RADIO_MESSAGES.length)];
+  const embed   = new EmbedBuilder().setDescription(message).setImage(gif).setColor(0x6900ff);
+  queue.textChannel?.send({ embeds: [embed] }).catch(() => null);
+}
+
 const PLAYLISTS_FILE = path.join(__dirname, 'playlists.json');
 
 function loadPlaylists() {
@@ -915,7 +937,7 @@ async function ensureQueue(interaction, voiceChannel) {
   const player = createAudioPlayer();
   connection.subscribe(player);
 
-  queue = { connection, player, voiceChannelId: voiceChannel.id, textChannel: interaction.channel, songs: [], createdAt: Date.now() };
+  queue = { connection, player, voiceChannelId: voiceChannel.id, textChannel: interaction.channel, songs: [], createdAt: Date.now(), songsPlayed: 0 };
   musicQueues.set(interaction.guild.id, queue);
 
   player.on(AudioPlayerStatus.Idle, () => {
@@ -972,6 +994,9 @@ function playNext(guildId) {
   const playT0  = Date.now();
   const proc    = streamYoutubeAudio(song.url);
   queue.currentProcess = proc;
+
+  queue.songsPlayed += 1;
+  if (queue.songsPlayed % SONGS_PER_GIF === 0) maybeSendRadioGif(queue);
 
   let gotAudio = false;
   proc.stdout.once('data', () => {
