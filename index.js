@@ -915,12 +915,16 @@ async function ensureQueue(interaction, voiceChannel) {
   const player = createAudioPlayer();
   connection.subscribe(player);
 
-  queue = { connection, player, voiceChannelId: voiceChannel.id, textChannel: interaction.channel, songs: [] };
+  queue = { connection, player, voiceChannelId: voiceChannel.id, textChannel: interaction.channel, songs: [], createdAt: Date.now() };
   musicQueues.set(interaction.guild.id, queue);
 
   player.on(AudioPlayerStatus.Idle, () => {
     queue.songs.shift();
     playNext(interaction.guild.id);
+  });
+
+  player.on(AudioPlayerStatus.Playing, () => {
+    console.log(`[timing] AudioPlayer Playing state reached: ${Date.now() - queue.createdAt}ms since voice join`);
   });
 
   player.on('error', err => {
@@ -964,12 +968,16 @@ function playNext(guildId) {
     return;
   }
 
-  const song = queue.songs[0];
-  const proc = streamYoutubeAudio(song.url);
+  const song    = queue.songs[0];
+  const playT0  = Date.now();
+  const proc    = streamYoutubeAudio(song.url);
   queue.currentProcess = proc;
 
   let gotAudio = false;
-  proc.stdout.once('data', () => { gotAudio = true; });
+  proc.stdout.once('data', () => {
+    gotAudio = true;
+    console.log(`[timing] yt-dlp first audio byte: ${Date.now() - playT0}ms (${song.title})`);
+  });
   proc.on('close', code => {
     if (!gotAudio) {
       const detail = proc.stderrOutput.trim().split('\n').slice(-5).join('\n') || `exit code ${code}, no error output`;
@@ -1235,8 +1243,10 @@ client.on('interactionCreate', async interaction => {
 
       await interaction.deferReply();
 
+      const playT0 = Date.now();
       const query = interaction.options.getString('song');
-      const queuePromise = ensureQueue(interaction, voiceChannel);
+      const queuePromise = ensureQueue(interaction, voiceChannel)
+        .then(r => { console.log(`[timing] voice queue ready: ${Date.now() - playT0}ms`); return r; });
 
       const songsToAdd = [];
       let spotifySource = null;
@@ -1275,6 +1285,7 @@ client.on('interactionCreate', async interaction => {
         console.error('Music search error:', err);
         return editReplyTTL(interaction, '🔮 Something went wrong searching for that song.');
       }
+      console.log(`[timing] song resolved: ${Date.now() - playT0}ms`);
 
       const { queue, error } = await queuePromise;
       if (error) return editReplyTTL(interaction, error);
