@@ -1216,6 +1216,8 @@ client.on('interactionCreate', async interaction => {
       await interaction.deferReply();
 
       const query = interaction.options.getString('song');
+      const queuePromise = ensureQueue(interaction, voiceChannel);
+
       const songsToAdd = [];
       let spotifySource = null;
       try {
@@ -1254,7 +1256,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.editReply('🔮 Something went wrong searching for that song.');
       }
 
-      const { queue, error } = await ensureQueue(interaction, voiceChannel);
+      const { queue, error } = await queuePromise;
       if (error) return interaction.editReply(error);
 
       const wasEmpty = queue.songs.length === 0;
@@ -1300,13 +1302,15 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '🔮 The queue is empty.', ephemeral: true });
       }
 
-      const list = queue.songs.slice(0, 10).map((s, i) =>
+      const QUEUE_DISPLAY_CAP = 50;
+      const list = queue.songs.slice(0, QUEUE_DISPLAY_CAP).map((s, i) =>
         i === 0 ? `▶️ **${s.title}** — requested by ${s.requestedBy}` : `${i}. ${s.title} — requested by ${s.requestedBy}`
       ).join('\n');
+      const more = queue.songs.length > QUEUE_DISPLAY_CAP ? `\n…and ${queue.songs.length - QUEUE_DISPLAY_CAP} more` : '';
 
       const embed = new EmbedBuilder()
         .setTitle('🎶 Music Queue')
-        .setDescription(list)
+        .setDescription(list + more)
         .setColor(0x6900ff);
       return interaction.reply({ embeds: [embed] });
     }
