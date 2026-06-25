@@ -2,3 +2,5 @@ node_modules
 .git
 .env
 playlists.json
+events.json
+event_media/

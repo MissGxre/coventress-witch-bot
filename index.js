@@ -526,6 +526,39 @@ function parseEmoji(str) {
   return { name: str.trim() };
 }
 
+// Converts a wall-clock date/time in America/Los_Angeles to a UTC epoch, DST-aware.
+function laOffsetMinutes(date) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const parts  = dtf.formatToParts(date).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+  const asUTC  = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  return Math.round((asUTC - date.getTime()) / 60000);
+}
+
+function laWallTimeToEpoch(dateStr, timeStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [hh, mm]  = timeStr.split(':').map(Number);
+  const guess     = Date.UTC(y, m - 1, d, hh, mm, 0);
+  let epoch       = guess - laOffsetMinutes(new Date(guess)) * 60000;
+  epoch           = guess - laOffsetMinutes(new Date(epoch)) * 60000;
+  return epoch;
+}
+
+function addOneYear(epochMs) {
+  const d = new Date(epochMs);
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  return d.getTime();
+}
+
+function formatLA(epochMs) {
+  return new Date(epochMs).toLocaleString('en-US', {
+    timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short',
+  }) + ' PT';
+}
+
 // ─── Witch Roles (ordered) ───────────────────────────────────────────────────
 
 const WITCH_ROLES = [
@@ -819,6 +852,38 @@ const commands = [
       opt.setName('colour').setDescription('Hex colour code (default: 6900ff)').setRequired(false)),
 
   new SlashCommandBuilder()
+    .setName('event')
+    .setDescription('📜 Staff only — schedule a custom announcement for a future date')
+    .addSubcommand(sub =>
+      sub.setName('create').setDescription('Schedule a new announcement')
+        .addChannelOption(opt =>
+          opt.setName('channel').setDescription('Channel to post in').setRequired(true))
+        .addStringOption(opt =>
+          opt.setName('date').setDescription('Date to post — YYYY-MM-DD, Los Angeles time').setRequired(true))
+        .addStringOption(opt =>
+          opt.setName('time').setDescription('Time to post — 24h HH:MM, Los Angeles time (default 12:00)').setRequired(false))
+        .addStringOption(opt =>
+          opt.setName('repeat').setDescription('Repeat every year? (e.g. birthdays)').setRequired(false)
+            .addChoices(
+              { name: 'One-time', value: 'none' },
+              { name: 'Yearly', value: 'yearly' },
+            ))
+        .addStringOption(opt =>
+          opt.setName('ping').setDescription('Tag everyone or online members?').setRequired(false)
+            .addChoices(
+              { name: '@everyone', value: 'everyone' },
+              { name: '@here', value: 'here' },
+            ))
+        .addAttachmentOption(opt =>
+          opt.setName('image').setDescription('Image or GIF to include').setRequired(false)))
+    .addSubcommand(sub =>
+      sub.setName('list').setDescription('List upcoming scheduled announcements'))
+    .addSubcommand(sub =>
+      sub.setName('delete').setDescription('Cancel a scheduled announcement')
+        .addStringOption(opt =>
+          opt.setName('id').setDescription('Which scheduled announcement to cancel').setRequired(true).setAutocomplete(true))),
+
+  new SlashCommandBuilder()
     .setName('play')
     .setDescription('🎶 Play a song in your voice channel')
     .addStringOption(opt =>
@@ -921,6 +986,97 @@ function savePlaylists() {
 }
 
 const playlists = loadPlaylists();
+
+// ─── Scheduled Announcements ────────────────────────────────────────────────
+
+const EVENT_MEDIA_DIR = path.join(DATA_DIR, 'event_media');
+const EVENTS_FILE     = path.join(DATA_DIR, 'events.json');
+
+function loadEvents() {
+  try {
+    return JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveEvents() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(EVENTS_FILE, JSON.stringify(events, null, 2));
+}
+
+const events = loadEvents();
+
+async function downloadToFile(url, destPath) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new Error(`Failed to download attachment: ${res.status}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+  fs.writeFileSync(destPath, buf);
+}
+
+function buildAnnouncementPayload(ev) {
+  const colorInt = ev.colorRaw ? parseInt(ev.colorRaw, 16) : 0x6900ff;
+  const color    = isNaN(colorInt) ? 0x6900ff : colorInt;
+
+  const embed = new EmbedBuilder()
+    .setTitle(ev.title)
+    .setDescription(ev.body)
+    .setColor(color);
+  if (ev.footer) embed.setFooter({ text: ev.footer });
+
+  const files = [];
+  if (ev.imagePath && fs.existsSync(ev.imagePath)) {
+    embed.setImage(`attachment://${ev.imageName}`);
+    files.push({ attachment: ev.imagePath, name: ev.imageName });
+  }
+
+  const pingTag      = ev.ping === 'everyone' ? '@everyone' : ev.ping === 'here' ? '@here' : '';
+  const finalContent = [pingTag, ev.content].filter(Boolean).join('\n') || undefined;
+
+  return {
+    content: finalContent,
+    embeds: [embed],
+    files,
+    allowedMentions: ev.ping ? { parse: ['everyone'] } : undefined,
+  };
+}
+
+async function checkScheduledEvents(client) {
+  const now = Date.now();
+  let changed = false;
+
+  for (const guildId of Object.keys(events)) {
+    const guildEvents = events[guildId];
+    for (let i = guildEvents.length - 1; i >= 0; i--) {
+      const ev = guildEvents[i];
+      if (ev.sendAt > now) continue;
+
+      const channel = await client.channels.fetch(ev.channelId).catch(() => null);
+      if (channel) {
+        await channel.send(buildAnnouncementPayload(ev)).catch(err =>
+          console.error(`Failed to send scheduled event "${ev.title}":`, err));
+      } else {
+        console.error(`Could not find channel ${ev.channelId} for scheduled event "${ev.title}".`);
+      }
+
+      if (ev.repeat === 'yearly') {
+        do { ev.sendAt = addOneYear(ev.sendAt); } while (ev.sendAt <= now);
+      } else {
+        if (ev.imagePath) fs.unlink(ev.imagePath, () => null);
+        guildEvents.splice(i, 1);
+      }
+      changed = true;
+    }
+  }
+
+  if (changed) saveEvents();
+}
+
+function scheduleEventChecker(client) {
+  checkScheduledEvents(client);
+  setInterval(() => checkScheduledEvents(client), 60 * 1000);
+}
 
 async function ensureQueue(interaction, voiceChannel) {
   let queue = musicQueues.get(interaction.guild.id);
@@ -1042,6 +1198,7 @@ client.once('ready', async () => {
   scheduleHoroscope(client);
   scheduleFriday(client);
   scheduleMonday(client);
+  scheduleEventChecker(client);
 });
 
 // ─── Interactions ─────────────────────────────────────────────────────────────
@@ -1057,6 +1214,16 @@ client.on('interactionCreate', async interaction => {
         .filter(name => name.includes(focused))
         .slice(0, 25)
         .map(name => ({ name, value: name }));
+      return interaction.respond(choices);
+    }
+    if (interaction.commandName === 'event') {
+      const guildEvents = events[interaction.guild.id] || [];
+      const focused = interaction.options.getFocused().toLowerCase();
+      const choices = guildEvents
+        .filter(e => e.title.toLowerCase().includes(focused))
+        .sort((a, b) => a.sendAt - b.sendAt)
+        .slice(0, 25)
+        .map(e => ({ name: `${formatLA(e.sendAt)} — ${e.title}`.slice(0, 100), value: e.id }));
       return interaction.respond(choices);
     }
     return interaction.respond([]);
@@ -1281,6 +1448,132 @@ client.on('interactionCreate', async interaction => {
 
       modal.addComponents(new ActionRowBuilder().addComponents(bodyInput));
       return interaction.showModal(modal);
+    }
+
+    // /event (staff only)
+    if (interaction.commandName === 'event') {
+      const hasRole = interaction.member.roles.cache.has(STAFF_ROLE_ID);
+      if (!hasRole) return interaction.reply({ content: '🖤 You do not have permission to use this command.', ephemeral: true });
+
+      const sub         = interaction.options.getSubcommand();
+      const guildId      = interaction.guild.id;
+      events[guildId]    = events[guildId] || [];
+      const guildEvents  = events[guildId];
+
+      if (sub === 'create') {
+        const channel = interaction.options.getChannel('channel');
+        const dateStr = interaction.options.getString('date').trim();
+        const timeStr = (interaction.options.getString('time') || '12:00').trim();
+        const repeat  = interaction.options.getString('repeat') || 'none';
+        const ping    = interaction.options.getString('ping') || null;
+        const image   = interaction.options.getAttachment('image');
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          return interaction.reply({ content: '🔮 Date must be in YYYY-MM-DD format.', ephemeral: true });
+        }
+        if (!/^\d{2}:\d{2}$/.test(timeStr)) {
+          return interaction.reply({ content: '🔮 Time must be in 24h HH:MM format.', ephemeral: true });
+        }
+
+        let sendAt = laWallTimeToEpoch(dateStr, timeStr);
+        const now  = Date.now();
+        if (repeat === 'yearly') {
+          while (sendAt <= now) sendAt = addOneYear(sendAt);
+        } else if (sendAt <= now) {
+          return interaction.reply({ content: '🔮 That date/time has already passed — pick a date in the future, or use yearly repeat.', ephemeral: true });
+        }
+
+        const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+        let imagePath = null, imageName = null;
+        if (image) {
+          imageName = `image${path.extname(image.name) || '.png'}`;
+          imagePath = path.join(EVENT_MEDIA_DIR, `${id}${path.extname(imageName)}`);
+          try {
+            await downloadToFile(image.url, imagePath);
+          } catch (err) {
+            console.error('Event image download error:', err);
+            return interaction.reply({ content: '🔮 Could not download that image — try again.', ephemeral: true });
+          }
+        }
+
+        pendingMessages.set(interaction.user.id, {
+          type: 'event', id, channelId: channel.id, sendAt, repeat, ping, imagePath, imageName,
+        });
+
+        const modal = new ModalBuilder()
+          .setCustomId('coventress_event_modal')
+          .setTitle('Schedule Announcement');
+
+        const titleInput = new TextInputBuilder()
+          .setCustomId('msg_title')
+          .setLabel('Title')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g. 🎂 Happy Birthday!')
+          .setRequired(true);
+
+        const bodyInput = new TextInputBuilder()
+          .setCustomId('msg_body')
+          .setLabel('Message')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('Write your announcement here. Supports markdown and emojis.')
+          .setRequired(true);
+
+        const colorInput = new TextInputBuilder()
+          .setCustomId('msg_color')
+          .setLabel('Colour (hex code)')
+          .setStyle(TextInputStyle.Short)
+          .setValue('6900ff')
+          .setRequired(false);
+
+        const footerInput = new TextInputBuilder()
+          .setCustomId('msg_footer')
+          .setLabel('Footer text (optional)')
+          .setStyle(TextInputStyle.Short)
+          .setValue('stay witchy')
+          .setRequired(false);
+
+        const contentInput = new TextInputBuilder()
+          .setCustomId('msg_content')
+          .setLabel('Plain text above embed (optional)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g. 🌙 @everyone or use <:emoji:id> for custom emojis')
+          .setRequired(false);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(titleInput),
+          new ActionRowBuilder().addComponents(bodyInput),
+          new ActionRowBuilder().addComponents(colorInput),
+          new ActionRowBuilder().addComponents(footerInput),
+          new ActionRowBuilder().addComponents(contentInput),
+        );
+
+        return interaction.showModal(modal);
+      }
+
+      if (sub === 'list') {
+        if (guildEvents.length === 0) {
+          return interaction.reply({ content: '🔮 No scheduled announcements.', ephemeral: true });
+        }
+        const sorted = [...guildEvents].sort((a, b) => a.sendAt - b.sendAt);
+        const list   = sorted.map(e =>
+          `• **${e.title}** — <#${e.channelId}> — ${formatLA(e.sendAt)}${e.repeat === 'yearly' ? ' (yearly)' : ''}`
+        ).join('\n');
+        const embed  = new EmbedBuilder().setTitle('📜 Scheduled Announcements').setDescription(list).setColor(0x6900ff);
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      if (sub === 'delete') {
+        const id  = interaction.options.getString('id');
+        const idx = guildEvents.findIndex(e => e.id === id);
+        if (idx === -1) {
+          return interaction.reply({ content: '🔮 Could not find that scheduled announcement.', ephemeral: true });
+        }
+        const [removed] = guildEvents.splice(idx, 1);
+        if (removed.imagePath) fs.unlink(removed.imagePath, () => null);
+        saveEvents();
+        return interaction.reply({ content: `🗑️ Cancelled **${removed.title}**.`, ephemeral: true });
+      }
     }
 
     // /play
@@ -1696,6 +1989,40 @@ client.on('interactionCreate', async interaction => {
 
     if (pending.link) await targetChannel.send({ content: pending.link });
     return interaction.reply({ content: `✅ Message sent to <#${pending.channelId}>`, ephemeral: true });
+  }
+
+  // ── Modal Submit — scheduled event ──
+  if (interaction.isModalSubmit() && interaction.customId === 'coventress_event_modal') {
+    const pending = pendingMessages.get(interaction.user.id);
+    if (!pending || pending.type !== 'event') {
+      return interaction.reply({ content: 'Something went wrong. Try /event create again.', ephemeral: true });
+    }
+    pendingMessages.delete(interaction.user.id);
+
+    const title    = interaction.fields.getTextInputValue('msg_title');
+    const body     = interaction.fields.getTextInputValue('msg_body');
+    const colorRaw = interaction.fields.getTextInputValue('msg_color').replace('#', '').trim();
+    const footer   = interaction.fields.getTextInputValue('msg_footer').trim();
+    const content  = interaction.fields.getTextInputValue('msg_content').trim();
+
+    const guildId = interaction.guild.id;
+    events[guildId] = events[guildId] || [];
+    events[guildId].push({
+      id: pending.id,
+      channelId: pending.channelId,
+      sendAt: pending.sendAt,
+      repeat: pending.repeat,
+      ping: pending.ping,
+      imagePath: pending.imagePath,
+      imageName: pending.imageName,
+      title, body, colorRaw, footer, content,
+    });
+    saveEvents();
+
+    return interaction.reply({
+      content: `✅ Scheduled **${title}** for <#${pending.channelId}> on ${formatLA(pending.sendAt)}${pending.repeat === 'yearly' ? ' (repeats yearly)' : ''}.`,
+      ephemeral: true,
+    });
   }
 
 });

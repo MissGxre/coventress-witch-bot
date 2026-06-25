@@ -1,3 +1,5 @@
 node_modules/
 .env
 playlists.json
+events.json
+event_media/
