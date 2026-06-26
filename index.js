@@ -559,6 +559,21 @@ function formatLA(epochMs) {
   }) + ' PT';
 }
 
+// Builds the @everyone/@here + individual @mention tag line, and the matching
+// allowedMentions so explicit user tags aren't suppressed by a ping's parse restriction.
+function buildPingAndMentions(ping, mentionUserIds) {
+  const pingTag     = ping === 'everyone' ? '@everyone' : ping === 'here' ? '@here' : '';
+  const mentionTags = (mentionUserIds || []).map(id => `<@${id}>`).join(' ');
+  const tagLine      = [pingTag, mentionTags].filter(Boolean).join(' ');
+
+  const allowedMentions = {};
+  if (ping) allowedMentions.parse = ['everyone'];
+  if (mentionUserIds && mentionUserIds.length) allowedMentions.users = mentionUserIds;
+  const hasRestriction = Boolean(allowedMentions.parse || allowedMentions.users);
+
+  return { tagLine, allowedMentions: hasRestriction ? allowedMentions : undefined };
+}
+
 // ─── Witch Roles (ordered) ───────────────────────────────────────────────────
 
 const WITCH_ROLES = [
@@ -804,6 +819,12 @@ const commands = [
           { name: '@everyone', value: 'everyone' },
           { name: '@here', value: 'here' },
         ))
+    .addUserOption(opt =>
+      opt.setName('user1').setDescription('Tag a specific person').setRequired(false))
+    .addUserOption(opt =>
+      opt.setName('user2').setDescription('Tag another person').setRequired(false))
+    .addUserOption(opt =>
+      opt.setName('user3').setDescription('Tag another person').setRequired(false))
     .addAttachmentOption(opt =>
       opt.setName('image').setDescription('Full-width banner image or GIF').setRequired(false))
     .addAttachmentOption(opt =>
@@ -874,6 +895,12 @@ const commands = [
               { name: '@everyone', value: 'everyone' },
               { name: '@here', value: 'here' },
             ))
+        .addUserOption(opt =>
+          opt.setName('user1').setDescription('Tag a specific person').setRequired(false))
+        .addUserOption(opt =>
+          opt.setName('user2').setDescription('Tag another person').setRequired(false))
+        .addUserOption(opt =>
+          opt.setName('user3').setDescription('Tag another person').setRequired(false))
         .addAttachmentOption(opt =>
           opt.setName('image').setDescription('Image or GIF to include').setRequired(false)))
     .addSubcommand(sub =>
@@ -1031,14 +1058,14 @@ function buildAnnouncementPayload(ev) {
     files.push({ attachment: ev.imagePath, name: ev.imageName });
   }
 
-  const pingTag      = ev.ping === 'everyone' ? '@everyone' : ev.ping === 'here' ? '@here' : '';
-  const finalContent = [pingTag, ev.content].filter(Boolean).join('\n') || undefined;
+  const { tagLine, allowedMentions } = buildPingAndMentions(ev.ping, ev.mentionUserIds);
+  const finalContent = [tagLine, ev.content].filter(Boolean).join('\n') || undefined;
 
   return {
     content: finalContent,
     embeds: [embed],
     files,
-    allowedMentions: ev.ping ? { parse: ['everyone'] } : undefined,
+    allowedMentions,
   };
 }
 
@@ -1341,6 +1368,11 @@ client.on('interactionCreate', async interaction => {
       const thumbAttach    = interaction.options.getAttachment('thumbnail');
       const videoAttach    = interaction.options.getAttachment('gif') || interaction.options.getAttachment('video');
 
+      const mentionUserIds = [1, 2, 3]
+        .map(i => interaction.options.getUser(`user${i}`))
+        .filter(Boolean)
+        .map(u => u.id);
+
       const buttons = [];
       for (let i = 1; i <= 3; i++) {
         const label = interaction.options.getString(`button${i}_label`);
@@ -1368,6 +1400,7 @@ client.on('interactionCreate', async interaction => {
         videoName:    videoAttach ? videoAttach.name : null,
         link:         interaction.options.getString('link') || null,
         ping:         interaction.options.getString('ping') || null,
+        mentionUserIds,
         option1Label,
         option1Emoji,
         option2Label,
@@ -1467,6 +1500,10 @@ client.on('interactionCreate', async interaction => {
         const repeat  = interaction.options.getString('repeat') || 'none';
         const ping    = interaction.options.getString('ping') || null;
         const image   = interaction.options.getAttachment('image');
+        const mentionUserIds = [1, 2, 3]
+          .map(i => interaction.options.getUser(`user${i}`))
+          .filter(Boolean)
+          .map(u => u.id);
 
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
           return interaction.reply({ content: '🔮 Date must be in YYYY-MM-DD format.', ephemeral: true });
@@ -1498,7 +1535,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         pendingMessages.set(interaction.user.id, {
-          type: 'event', id, channelId: channel.id, sendAt, repeat, ping, imagePath, imageName,
+          type: 'event', id, channelId: channel.id, sendAt, repeat, ping, mentionUserIds, imagePath, imageName,
         });
 
         const modal = new ModalBuilder()
@@ -1976,15 +2013,15 @@ client.on('interactionCreate', async interaction => {
       files.push({ attachment: pending.videoUrl, name: pending.videoName || 'video' });
     }
 
-    const pingTag      = pending.ping === 'everyone' ? '@everyone' : pending.ping === 'here' ? '@here' : '';
-    const finalContent = [pingTag, content].filter(Boolean).join('\n') || undefined;
+    const { tagLine, allowedMentions } = buildPingAndMentions(pending.ping, pending.mentionUserIds);
+    const finalContent = [tagLine, content].filter(Boolean).join('\n') || undefined;
 
     await targetChannel.send({
       content: finalContent,
       embeds: [embed],
       components: messageComponents,
       files,
-      allowedMentions: pending.ping ? { parse: ['everyone'] } : undefined,
+      allowedMentions,
     });
 
     if (pending.link) await targetChannel.send({ content: pending.link });
@@ -2013,6 +2050,7 @@ client.on('interactionCreate', async interaction => {
       sendAt: pending.sendAt,
       repeat: pending.repeat,
       ping: pending.ping,
+      mentionUserIds: pending.mentionUserIds,
       imagePath: pending.imagePath,
       imageName: pending.imageName,
       title, body, colorRaw, footer, content,
